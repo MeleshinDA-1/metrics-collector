@@ -6,9 +6,7 @@ import (
 	"time"
 )
 
-const pollingInterval = 2 * time.Second
-
-func gatherMetrics(metricStorage *metricStorage) {
+func gatherMetrics(metricStorage *metricStorage, pollingInterval time.Duration) {
 	for {
 		time.Sleep(pollingInterval)
 		gatherMetricsInternal(metricStorage)

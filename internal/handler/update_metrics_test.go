@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/MeleshinDA-1/golang-practicum-alice/internal/repository"
+	"github.com/MeleshinDA-1/metrics-collector/internal/repository"
 	"github.com/gorilla/mux"
 )
 

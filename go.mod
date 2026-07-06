@@ -1,4 +1,4 @@
-module github.com/MeleshinDA-1/golang-practicum-alice
+module github.com/MeleshinDA-1/metrics-collector
 
 go 1.26.2
 

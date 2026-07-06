@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/MeleshinDA-1/golang-practicum-alice/internal/repository"
+	"github.com/MeleshinDA-1/metrics-collector/internal/repository"
 	"github.com/gorilla/mux"
 )
 
@@ -117,9 +117,5 @@ func (handler *MetricsHandler) ListMetrics(res http.ResponseWriter, req *http.Re
 }
 
 func pathValue(req *http.Request, name string) string {
-	if value := req.PathValue(name); value != "" {
-		return value
-	}
-
 	return mux.Vars(req)[name]
 }

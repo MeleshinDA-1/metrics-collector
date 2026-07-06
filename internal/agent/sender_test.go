@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"testing"
+	"time"
 )
 
 type receivedMetricRequest struct {
@@ -26,7 +27,7 @@ func TestMetricSenderSendMetric(t *testing.T) {
 	}))
 	defer server.Close()
 
-	sender := newMetricSender(server.URL)
+	sender := newMetricSender(server.URL, time.Second)
 
 	err := sender.sendMetric("gauge", "Alloc", "42.5")
 	if err != nil {
@@ -53,7 +54,7 @@ func TestMetricSenderSendMetricReturnsErrorOnUnexpectedStatus(t *testing.T) {
 	}))
 	defer server.Close()
 
-	sender := newMetricSender(server.URL)
+	sender := newMetricSender(server.URL, time.Second)
 
 	err := sender.sendMetric("gauge", "Alloc", "42.5")
 	if err == nil {
@@ -80,7 +81,7 @@ func TestMetricSenderSendMetricsInternal(t *testing.T) {
 		},
 	)
 
-	sender := newMetricSender(server.URL)
+	sender := newMetricSender(server.URL, time.Second)
 	sender.sendMetricsInternal(storage)
 
 	wantPaths := map[string]bool{
@@ -94,5 +95,38 @@ func TestMetricSenderSendMetricsInternal(t *testing.T) {
 
 	if !reflect.DeepEqual(gotPaths, wantPaths) {
 		t.Fatalf("paths = %v, want %v", gotPaths, wantPaths)
+	}
+}
+
+func TestNormalizeServerAddress(t *testing.T) {
+	tests := []struct {
+		name          string
+		serverAddress string
+		want          string
+	}{
+		{
+			name:          "address without scheme",
+			serverAddress: "localhost:8080",
+			want:          "http://localhost:8080",
+		},
+		{
+			name:          "address with scheme",
+			serverAddress: "http://localhost:8080",
+			want:          "http://localhost:8080",
+		},
+		{
+			name:          "address with trailing slash",
+			serverAddress: "http://localhost:8080/",
+			want:          "http://localhost:8080",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := normalizeServerAddress(test.serverAddress)
+			if got != test.want {
+				t.Fatalf("address = %q, want %q", got, test.want)
+			}
+		})
 	}
 }

@@ -9,28 +9,29 @@ import (
 )
 
 const (
-	reportInterval = 10 * time.Second
 	requestTimeout = 3 * time.Second
 )
 
 type metricSender struct {
-	client  *http.Client
-	urlBase string
+	client         *http.Client
+	urlBase        string
+	reportInterval time.Duration
 }
 
-func newMetricSender(serverAddress string) *metricSender {
+func newMetricSender(serverAddress string, reportInterval time.Duration) *metricSender {
 	return &metricSender{
 		client: &http.Client{
 			Timeout: requestTimeout,
 		},
-		urlBase: strings.TrimRight(serverAddress, "/") + "/update/%s/%s/%s",
+		urlBase:        normalizeServerAddress(serverAddress) + "/update/%s/%s/%s",
+		reportInterval: reportInterval,
 	}
 }
 
 func (metricSender *metricSender) sendMetrics(metricStorage *metricStorage) {
 	for {
 		metricSender.sendMetricsInternal(metricStorage)
-		time.Sleep(reportInterval)
+		time.Sleep(metricSender.reportInterval)
 	}
 }
 
@@ -71,4 +72,13 @@ func (metricSender *metricSender) sendMetric(metricType string, metricName strin
 	}
 
 	return nil
+}
+
+func normalizeServerAddress(serverAddress string) string {
+	serverAddress = strings.TrimRight(serverAddress, "/")
+	if strings.HasPrefix(serverAddress, "http://") || strings.HasPrefix(serverAddress, "https://") {
+		return serverAddress
+	}
+
+	return "http://" + serverAddress
 }

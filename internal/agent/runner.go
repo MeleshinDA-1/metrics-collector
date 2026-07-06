@@ -1,14 +1,14 @@
 package agent
 
-const defaultServerAddress = "http://localhost:8080"
+import "time"
 
-func Run() {
+func Run(serverAddress string, pollInterval time.Duration, reportInterval time.Duration) {
 	metricStorage := newMetricStorage()
 	gatherMetricsInternal(metricStorage)
 
-	metricSender := newMetricSender(defaultServerAddress)
+	metricSender := newMetricSender(serverAddress, reportInterval)
 
-	go gatherMetrics(metricStorage)
+	go gatherMetrics(metricStorage, pollInterval)
 	go metricSender.sendMetrics(metricStorage)
 	select {}
 }
