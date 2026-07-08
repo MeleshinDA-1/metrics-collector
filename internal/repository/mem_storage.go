@@ -1,14 +1,13 @@
 package repository
 
-import "sync"
+import (
+	"sync"
 
-type MetricsSnapshot struct {
-	Gauges   map[string]float64
-	Counters map[string]int64
-}
+	models "github.com/MeleshinDA-1/metrics-collector/internal/model"
+)
 
 type MemStorage struct {
-	mutex    sync.RWMutex
+	mutex    sync.Mutex
 	gauges   map[string]float64
 	counters map[string]int64
 }
@@ -35,24 +34,24 @@ func (storage *MemStorage) AddCounter(name string, delta int64) {
 }
 
 func (storage *MemStorage) GetGauge(name string) (float64, bool) {
-	storage.mutex.RLock()
-	defer storage.mutex.RUnlock()
+	storage.mutex.Lock()
+	defer storage.mutex.Unlock()
 
 	value, ok := storage.gauges[name]
 	return value, ok
 }
 
 func (storage *MemStorage) GetCounter(name string) (int64, bool) {
-	storage.mutex.RLock()
-	defer storage.mutex.RUnlock()
+	storage.mutex.Lock()
+	defer storage.mutex.Unlock()
 
 	value, ok := storage.counters[name]
 	return value, ok
 }
 
-func (storage *MemStorage) Snapshot() MetricsSnapshot {
-	storage.mutex.RLock()
-	defer storage.mutex.RUnlock()
+func (storage *MemStorage) Snapshot() models.MetricsSnapshot {
+	storage.mutex.Lock()
+	defer storage.mutex.Unlock()
 
 	gauges := make(map[string]float64, len(storage.gauges))
 	for name, value := range storage.gauges {
@@ -64,7 +63,7 @@ func (storage *MemStorage) Snapshot() MetricsSnapshot {
 		counters[name] = value
 	}
 
-	return MetricsSnapshot{
+	return models.MetricsSnapshot{
 		Gauges:   gauges,
 		Counters: counters,
 	}

@@ -98,6 +98,31 @@ func TestMetricSenderSendMetricsInternal(t *testing.T) {
 	}
 }
 
+func TestMetricSenderKeepsCounterAfterFailedSend(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	storage := newMetricStorage()
+	storage.updateMetrics(
+		nil,
+		map[string]int64{
+			"PollCount": 2,
+		},
+	)
+
+	sender := newMetricSender(server.URL, time.Second)
+	sender.sendMetricsInternal(storage)
+
+	assertAllMetrics(t, storage.snapshot(), allMetrics{
+		gauges: map[string]float64{},
+		counters: map[string]int64{
+			"PollCount": 2,
+		},
+	})
+}
+
 func TestNormalizeServerAddress(t *testing.T) {
 	tests := []struct {
 		name          string

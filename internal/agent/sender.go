@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -41,21 +42,41 @@ func (metricSender *metricSender) sendMetricsInternal(metricStorage *metricStora
 	for metricName, metricValue := range metrics.gauges {
 		err := metricSender.sendMetric("gauge", metricName, strconv.FormatFloat(metricValue, 'f', -1, 64))
 		if err != nil {
-			fmt.Printf("failed to send gauge %s: %v\n", metricName, err)
+			slog.Error("failed to send gauge", "metric", metricName, "err", err)
 		}
 	}
 
+	metricSender.sendCounters(metricStorage, metrics)
+}
+
+func (metricSender *metricSender) sendCounters(metricStorage *metricStorage, metrics allMetrics) {
 	for metricName, metricValue := range metrics.counters {
 		err := metricSender.sendMetric("counter", metricName, strconv.FormatInt(metricValue, 10))
 		if err != nil {
-			fmt.Printf("failed to send counter %s: %v\n", metricName, err)
+			slog.Error("failed to send counter", "metric", metricName, "err", err)
+			continue
 		}
+
+		metricStorage.markCounterSent(metricName, metricValue)
 	}
+}
+
+func (metricStorage *metricStorage) markCounterSent(counterName string, valueSent int64) {
+	metricStorage.mutex.Lock()
+	defer metricStorage.mutex.Unlock()
+
+	currentValue := metricStorage.allMetrics.counters[counterName]
+	if currentValue <= valueSent {
+		metricStorage.allMetrics.counters[counterName] = 0
+		return
+	}
+
+	metricStorage.allMetrics.counters[counterName] = currentValue - valueSent
 }
 
 func (metricSender *metricSender) sendMetric(metricType string, metricName string, metricValue string) error {
 	url := fmt.Sprintf(metricSender.urlBase, metricType, metricName, metricValue)
-	req, err := http.NewRequest("POST", url, nil)
+	req, err := http.NewRequest(http.MethodPost, url, nil)
 	if err != nil {
 		return err
 	}

@@ -239,6 +239,25 @@ func TestListMetrics(t *testing.T) {
 	}
 }
 
+func TestListMetricsEscapesHTML(t *testing.T) {
+	storage := repository.NewMemStorage()
+	storage.SetGauge(`<script>alert("x")</script>`, 1)
+	metricsHandler := NewMetricsHandler(storage)
+
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	response := httptest.NewRecorder()
+
+	metricsHandler.ListMetrics(response, request)
+
+	bodyText := response.Body.String()
+	if strings.Contains(bodyText, `<script>alert("x")</script>`) {
+		t.Fatalf("body contains unescaped HTML: %q", bodyText)
+	}
+	if !strings.Contains(bodyText, "&lt;script&gt;") {
+		t.Fatalf("body does not contain escaped metric name: %q", bodyText)
+	}
+}
+
 func assertUpdateMetricsStatus(t *testing.T, request updateMetricsRequest, wantStatusCode int) {
 	t.Helper()
 
@@ -284,14 +303,8 @@ func handleUpdateMetricsWithHandler(metricsHandler *MetricsHandler, request upda
 		request.metricValue,
 	)
 	req := httptest.NewRequest(request.method, target, nil)
-	req = mux.SetURLVars(req, map[string]string{
-		"metricType":  request.metricType,
-		"metricName":  request.metricName,
-		"metricValue": request.metricValue,
-	})
-
 	response := httptest.NewRecorder()
-	metricsHandler.UpdateMetrics(response, req)
+	NewRouter(metricsHandler).ServeHTTP(response, req)
 
 	return response
 }

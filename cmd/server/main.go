@@ -1,31 +1,19 @@
 package main
 
 import (
-	"net/http"
+	"log"
 
 	"github.com/MeleshinDA-1/metrics-collector/internal/config"
-	"github.com/MeleshinDA-1/metrics-collector/internal/handler"
-	"github.com/MeleshinDA-1/metrics-collector/internal/repository"
-	"github.com/gorilla/mux"
+	"github.com/MeleshinDA-1/metrics-collector/internal/server"
 )
 
 func main() {
-	serverConfig := config.MustParseServerConfig()
-
-	startCollectorServer(serverConfig.Address)
-}
-
-func startCollectorServer(address string) {
-	storage := repository.NewMemStorage()
-	metricsHandler := handler.NewMetricsHandler(storage)
-
-	router := mux.NewRouter()
-	router.HandleFunc("/", metricsHandler.ListMetrics).Methods(http.MethodGet)
-	router.HandleFunc("/update/{metricType}/{metricName}/{metricValue}", metricsHandler.UpdateMetrics).Methods(http.MethodPost)
-	router.HandleFunc("/value/{metricType}/{metricName}", metricsHandler.ValueMetrics).Methods(http.MethodGet)
-
-	err := http.ListenAndServe(address, router)
+	serverConfig, err := config.ParseServerConfigFromArgs()
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
+	}
+
+	if err := server.Run(serverConfig.Address); err != nil {
+		log.Fatal(err)
 	}
 }

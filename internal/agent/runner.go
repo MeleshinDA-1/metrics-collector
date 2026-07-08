@@ -9,6 +9,5 @@ func Run(serverAddress string, pollInterval time.Duration, reportInterval time.D
 	metricSender := newMetricSender(serverAddress, reportInterval)
 
 	go gatherMetrics(metricStorage, pollInterval)
-	go metricSender.sendMetrics(metricStorage)
-	select {}
+	metricSender.sendMetrics(metricStorage)
 }

@@ -2,20 +2,42 @@ package handler
 
 import (
 	"fmt"
-	"html"
+	"html/template"
 	"net/http"
 	"strconv"
 
-	"github.com/MeleshinDA-1/metrics-collector/internal/repository"
+	models "github.com/MeleshinDA-1/metrics-collector/internal/model"
 	"github.com/gorilla/mux"
 )
+
+type MetricsSnapshot = models.MetricsSnapshot
+
+var metricsListTemplate = template.Must(template.New("metrics-list").Parse(`
+<html>
+<body>
+<ul>
+{{range .Gauges}}
+	<li>{{.Name}}: {{.Value}}</li>
+{{end}}
+{{range .Counters}}
+	<li>{{.Name}}: {{.Value}}</li>
+{{end}}
+</ul>
+</body>
+</html>
+`))
+
+type metricView struct {
+	Name  string
+	Value string
+}
 
 type MetricsStorage interface {
 	SetGauge(name string, value float64)
 	AddCounter(name string, delta int64)
 	GetGauge(name string) (float64, bool)
 	GetCounter(name string) (int64, bool)
-	Snapshot() repository.MetricsSnapshot
+	Snapshot() MetricsSnapshot
 }
 
 type MetricsHandler struct {
@@ -29,11 +51,6 @@ func NewMetricsHandler(storage MetricsStorage) *MetricsHandler {
 }
 
 func (handler *MetricsHandler) UpdateMetrics(res http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodPost {
-		http.Error(res, "Only POST allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
 	metricType := pathValue(req, "metricType")
 	metricName := pathValue(req, "metricName")
 	metricValue := pathValue(req, "metricValue")
@@ -62,11 +79,6 @@ func (handler *MetricsHandler) UpdateMetrics(res http.ResponseWriter, req *http.
 }
 
 func (handler *MetricsHandler) ValueMetrics(res http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet {
-		http.Error(res, "Only GET allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
 	metricType := pathValue(req, "metricType")
 	metricName := pathValue(req, "metricName")
 
@@ -93,27 +105,33 @@ func (handler *MetricsHandler) ValueMetrics(res http.ResponseWriter, req *http.R
 }
 
 func (handler *MetricsHandler) ListMetrics(res http.ResponseWriter, req *http.Request) {
-	if req.URL.Path != "/" {
-		http.NotFound(res, req)
-		return
-	}
-
-	if req.Method != http.MethodGet {
-		http.Error(res, "Only GET allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
 	metrics := handler.storage.Snapshot()
 
-	res.Header().Set("Content-Type", "text/html")
-	_, _ = res.Write([]byte("<html><body><ul>"))
+	data := struct {
+		Gauges   []metricView
+		Counters []metricView
+	}{
+		Gauges:   make([]metricView, 0, len(metrics.Gauges)),
+		Counters: make([]metricView, 0, len(metrics.Counters)),
+	}
+
 	for name, value := range metrics.Gauges {
-		_, _ = fmt.Fprintf(res, "<li>%s: %s</li>", html.EscapeString(name), strconv.FormatFloat(value, 'f', -1, 64))
+		data.Gauges = append(data.Gauges, metricView{
+			Name:  name,
+			Value: strconv.FormatFloat(value, 'f', -1, 64),
+		})
 	}
 	for name, value := range metrics.Counters {
-		_, _ = fmt.Fprintf(res, "<li>%s: %s</li>", html.EscapeString(name), strconv.FormatInt(value, 10))
+		data.Counters = append(data.Counters, metricView{
+			Name:  name,
+			Value: strconv.FormatInt(value, 10),
+		})
 	}
-	_, _ = res.Write([]byte("</ul></body></html>"))
+
+	res.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := metricsListTemplate.Execute(res, data); err != nil {
+		http.Error(res, "failed to render metrics", http.StatusInternalServerError)
+	}
 }
 
 func pathValue(req *http.Request, name string) string {

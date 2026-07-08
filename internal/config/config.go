@@ -2,7 +2,6 @@ package config
 
 import (
 	"flag"
-	"fmt"
 	"io"
 	"os"
 	"time"
@@ -39,14 +38,8 @@ func ParseServerConfig(args []string) (ServerConfig, error) {
 	}, nil
 }
 
-func MustParseServerConfig() ServerConfig {
-	config, err := ParseServerConfig(os.Args[1:])
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(2)
-	}
-
-	return config
+func ParseServerConfigFromArgs() (ServerConfig, error) {
+	return ParseServerConfig(os.Args[1:])
 }
 
 func ParseAgentConfig(args []string) (AgentConfig, error) {
@@ -68,12 +61,6 @@ func ParseAgentConfig(args []string) (AgentConfig, error) {
 	}, nil
 }
 
-func MustParseAgentConfig() AgentConfig {
-	config, err := ParseAgentConfig(os.Args[1:])
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(2)
-	}
-
-	return config
+func ParseAgentConfigFromArgs() (AgentConfig, error) {
+	return ParseAgentConfig(os.Args[1:])
 }
