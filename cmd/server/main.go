@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	serverConfig, err := config.ParseServerConfigFromArgs()
+	serverConfig, err := config.ParseServerConfig()
 	if err != nil {
 		log.Fatal(err)
 	}
