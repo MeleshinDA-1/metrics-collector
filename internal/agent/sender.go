@@ -1,12 +1,15 @@
 package agent
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
+
+	models "github.com/MeleshinDA-1/metrics-collector/internal/model"
 )
 
 const (
@@ -24,7 +27,7 @@ func newMetricSender(serverAddress string, reportInterval time.Duration) *metric
 		client: &http.Client{
 			Timeout: requestTimeout,
 		},
-		urlBase:        normalizeServerAddress(serverAddress) + "/update/%s/%s/%s",
+		urlBase:        normalizeServerAddress(serverAddress) + "/update",
 		reportInterval: reportInterval,
 	}
 }
@@ -38,9 +41,12 @@ func (metricSender *metricSender) sendMetrics(metricStorage *metricStorage) {
 
 func (metricSender *metricSender) sendMetricsInternal(metricStorage *metricStorage) {
 	metrics := metricStorage.snapshot()
-
+	var requestMetric models.Metrics
+	requestMetric.MType = "gauge"
 	for metricName, metricValue := range metrics.gauges {
-		err := metricSender.sendMetric("gauge", metricName, strconv.FormatFloat(metricValue, 'f', -1, 64))
+		requestMetric.ID = metricName
+		requestMetric.Value = &metricValue
+		err := metricSender.sendMetric(requestMetric)
 		if err != nil {
 			slog.Error("failed to send gauge", "metric", metricName, "err", err)
 		}
@@ -50,8 +56,12 @@ func (metricSender *metricSender) sendMetricsInternal(metricStorage *metricStora
 }
 
 func (metricSender *metricSender) sendCounters(metricStorage *metricStorage, metrics allMetrics) {
+	var requestMetric models.Metrics
+	requestMetric.MType = "counter"
 	for metricName, metricValue := range metrics.counters {
-		err := metricSender.sendMetric("counter", metricName, strconv.FormatInt(metricValue, 10))
+		requestMetric.ID = metricName
+		requestMetric.Delta = &metricValue
+		err := metricSender.sendMetric(requestMetric)
 		if err != nil {
 			slog.Error("failed to send counter", "metric", metricName, "err", err)
 			continue
@@ -74,14 +84,18 @@ func (metricStorage *metricStorage) markCounterSent(counterName string, valueSen
 	metricStorage.allMetrics.counters[counterName] = currentValue - valueSent
 }
 
-func (metricSender *metricSender) sendMetric(metricType string, metricName string, metricValue string) error {
-	url := fmt.Sprintf(metricSender.urlBase, metricType, metricName, metricValue)
-	req, err := http.NewRequest(http.MethodPost, url, nil)
+func (metricSender *metricSender) sendMetric(requestMetric models.Metrics) error {
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(requestMetric); err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, url, &buf)
 	if err != nil {
 		return err
 	}
 
-	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set("Content-Type", "application/json")
 	resp, err := metricSender.client.Do(req)
 	if err != nil {
 		return err
