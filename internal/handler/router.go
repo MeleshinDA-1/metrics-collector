@@ -21,6 +21,32 @@ func NewRouter(metricsHandler *MetricsHandler) http.Handler {
 	return LoggingMiddleware(router)
 }
 
+type ResponseInterceptor struct {
+	responseWriter http.ResponseWriter
+	statusCode     int
+	size           int
+}
+
+func NewResponseInterceptor(responseWriter http.ResponseWriter) *ResponseInterceptor {
+	statusCode := http.StatusOK
+	return &ResponseInterceptor{responseWriter: responseWriter, statusCode: statusCode, size: 0}
+}
+
+func (interceptor *ResponseInterceptor) Header() http.Header {
+	return interceptor.responseWriter.Header()
+}
+
+func (interceptor *ResponseInterceptor) Write(arg []byte) (int, error) {
+	size, err := interceptor.responseWriter.Write(arg)
+	interceptor.size += size
+	return size, err
+}
+
+func (interceptor *ResponseInterceptor) WriteHeader(statusCode int) {
+	interceptor.statusCode = statusCode
+	interceptor.responseWriter.WriteHeader(statusCode)
+}
+
 func LoggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
@@ -34,11 +60,15 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 			}
 		}
 
-		next.ServeHTTP(w, r)
+		interceptor := NewResponseInterceptor(w)
+		next.ServeHTTP(interceptor, r)
 
 		slog.Info("request completed",
 			"method", r.Method,
-			"path", r.URL.Path,
+			"requestUri", r.RequestURI,
+			"requestID", requestID,
+			"size", interceptor.size,
+			"statusCode", interceptor.statusCode,
 			"duration_ms", time.Since(start).Milliseconds(),
 		)
 	})
