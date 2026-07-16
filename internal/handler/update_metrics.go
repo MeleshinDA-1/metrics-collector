@@ -80,31 +80,78 @@ func (handler *MetricsHandler) UpdateMetrics(res http.ResponseWriter, req *http.
 }
 
 func (handler *MetricsHandler) UpdateMetricsJson(res http.ResponseWriter, req *http.Request) {
-	var metric models.Metrics
-	if err := json.NewDecoder(req.Body).Decode(&metric); err != nil {
+	var requestMetric models.Metrics
+	if err := json.NewDecoder(req.Body).Decode(&requestMetric); err != nil {
 		http.Error(res, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	switch metric.MType {
+	switch requestMetric.MType {
 	case "counter":
-		if metric.Delta == nil {
+		if requestMetric.Delta == nil {
 			http.Error(res, "value is required", http.StatusBadRequest)
 			return
 		}
-		handler.storage.AddCounter(metric.ID, *metric.Delta)
+		handler.storage.AddCounter(requestMetric.ID, *requestMetric.Delta)
 	case "gauge":
-		if metric.Value == nil {
+		if requestMetric.Value == nil {
 			http.Error(res, "delta is required", http.StatusBadRequest)
 			return
 		}
-		handler.storage.SetGauge(metric.ID, *metric.Value)
+		handler.storage.SetGauge(requestMetric.ID, *requestMetric.Value)
 	default:
-		http.Error(res, fmt.Sprintf("Unknown metric type \"%s\"", metric.MType), http.StatusBadRequest)
+		http.Error(res, fmt.Sprintf("Unknown metric type \"%s\"", requestMetric.MType), http.StatusBadRequest)
 		return
 	}
 
 	res.WriteHeader(http.StatusOK)
+}
+
+func (handler *MetricsHandler) ValueMetricsJson(res http.ResponseWriter, req *http.Request) {
+	var requestMetric models.Metrics
+	if err := json.NewDecoder(req.Body).Decode(&requestMetric); err != nil {
+		http.Error(res, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var responseMetric models.Metrics = models.Metrics{
+		ID:    requestMetric.ID,
+		MType: requestMetric.MType,
+		Delta: nil,
+		Value: nil,
+	}
+
+	res.Header().Set("Content-Type", "application/json")
+
+	switch requestMetric.MType {
+	case "counter":
+		value, ok := handler.storage.GetCounter(requestMetric.ID)
+		if !ok {
+			http.Error(res, "Metric not found", http.StatusNotFound)
+			return
+		}
+
+		responseMetric.Delta = &value
+		if err := json.NewEncoder(res).Encode(responseMetric); err != nil {
+			http.Error(res, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	case "gauge":
+		value, ok := handler.storage.GetGauge(requestMetric.ID)
+		if !ok {
+			http.Error(res, "Metric not found", http.StatusNotFound)
+			return
+		}
+
+		responseMetric.Value = &value
+		if err := json.NewEncoder(res).Encode(responseMetric); err != nil {
+			http.Error(res, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	default:
+		http.Error(res, fmt.Sprintf("Unknown metric type \"%s\"", requestMetric.MType), http.StatusNotFound)
+
+	}
 }
 
 func (handler *MetricsHandler) ValueMetrics(res http.ResponseWriter, req *http.Request) {
