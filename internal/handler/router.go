@@ -16,6 +16,7 @@ func NewRouter(metricsHandler *MetricsHandler) http.Handler {
 
 	router.HandleFunc("/", metricsHandler.ListMetrics).Methods(http.MethodGet)
 	router.HandleFunc("/update/{metricType}/{metricName}/{metricValue}", metricsHandler.UpdateMetrics).Methods(http.MethodPost)
+	router.HandleFunc("/update", metricsHandler.UpdateMetricsJson).Methods(http.MethodPost)
 	router.HandleFunc("/value/{metricType}/{metricName}", metricsHandler.ValueMetrics).Methods(http.MethodGet)
 
 	return LoggingMiddleware(router)

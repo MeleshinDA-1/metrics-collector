@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -72,6 +73,34 @@ func (handler *MetricsHandler) UpdateMetrics(res http.ResponseWriter, req *http.
 		handler.storage.SetGauge(metricName, value)
 	default:
 		http.Error(res, fmt.Sprintf("Unknown metric type \"%s\"", metricType), http.StatusBadRequest)
+		return
+	}
+
+	res.WriteHeader(http.StatusOK)
+}
+
+func (handler *MetricsHandler) UpdateMetricsJson(res http.ResponseWriter, req *http.Request) {
+	var metric models.Metrics
+	if err := json.NewDecoder(req.Body).Decode(&metric); err != nil {
+		http.Error(res, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	switch metric.MType {
+	case "counter":
+		if metric.Delta == nil {
+			http.Error(res, "value is required", http.StatusBadRequest)
+			return
+		}
+		handler.storage.AddCounter(metric.ID, *metric.Delta)
+	case "gauge":
+		if metric.Value == nil {
+			http.Error(res, "delta is required", http.StatusBadRequest)
+			return
+		}
+		handler.storage.SetGauge(metric.ID, *metric.Value)
+	default:
+		http.Error(res, fmt.Sprintf("Unknown metric type \"%s\"", metric.MType), http.StatusBadRequest)
 		return
 	}
 
