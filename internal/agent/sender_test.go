@@ -1,78 +1,107 @@
 package agent
 
 import (
+	"compress/gzip"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"testing"
 	"time"
+
+	models "github.com/MeleshinDA-1/metrics-collector/internal/model"
 )
 
-type receivedMetricRequest struct {
-	method      string
-	path        string
-	contentType string
+type capturedMetricRequest struct {
+	method          string
+	path            string
+	mediaType       string
+	contentEncoding string
+	metric          models.Metrics
 }
 
-func TestMetricSenderSendMetric(t *testing.T) {
-	receivedRequests := make([]receivedMetricRequest, 0, 1)
+func TestMetricsSenderSendMetric(t *testing.T) {
+	capturedRequests := make([]capturedMetricRequest, 0, 1)
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		receivedRequests = append(receivedRequests, receivedMetricRequest{
-			method:      request.Method,
-			path:        request.URL.Path,
-			contentType: request.Header.Get("Content-Type"),
+		metric, err := decodeGzipMetric(request)
+		if err != nil {
+			t.Errorf("read compressed metric: %v", err)
+			response.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		capturedRequests = append(capturedRequests, capturedMetricRequest{
+			method:          request.Method,
+			path:            request.URL.Path,
+			mediaType:       request.Header.Get("Content-Type"),
+			contentEncoding: request.Header.Get("Content-Encoding"),
+			metric:          metric,
 		})
 
 		response.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
 
-	sender := newMetricSender(server.URL, time.Second)
+	sender := newMetricsSender(server.URL, time.Second)
+	metricValue := 42.5
+	metric := models.Metrics{
+		ID:    "Alloc",
+		MType: models.Gauge,
+		Value: &metricValue,
+	}
 
-	err := sender.sendMetric("gauge", "Alloc", "42.5")
+	err := sender.sendMetric(metric)
 	if err != nil {
 		t.Fatalf("sendMetric returned error: %v", err)
 	}
 
-	if len(receivedRequests) != 1 {
-		t.Fatalf("requests count = %d, want %d", len(receivedRequests), 1)
+	if len(capturedRequests) != 1 {
+		t.Fatalf("requests count = %d, want %d", len(capturedRequests), 1)
 	}
 
-	want := receivedMetricRequest{
-		method:      http.MethodPost,
-		path:        "/update/gauge/Alloc/42.5",
-		contentType: "text/plain",
+	want := capturedMetricRequest{
+		method:          http.MethodPost,
+		path:            "/update",
+		mediaType:       "application/json",
+		contentEncoding: "gzip",
+		metric:          metric,
 	}
-	if receivedRequests[0] != want {
-		t.Fatalf("request = %+v, want %+v", receivedRequests[0], want)
+	if !reflect.DeepEqual(capturedRequests[0], want) {
+		t.Fatalf("request = %+v, want %+v", capturedRequests[0], want)
 	}
 }
 
-func TestMetricSenderSendMetricReturnsErrorOnUnexpectedStatus(t *testing.T) {
+func TestMetricsSenderSendMetricReturnsErrorOnUnexpectedStatus(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		response.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
 
-	sender := newMetricSender(server.URL, time.Second)
+	sender := newMetricsSender(server.URL, time.Second)
 
-	err := sender.sendMetric("gauge", "Alloc", "42.5")
+	err := sender.sendMetric(models.Metrics{})
 	if err == nil {
 		t.Fatal("sendMetric returned nil error, want non-nil error")
 	}
 }
 
-func TestMetricSenderSendMetricsInternal(t *testing.T) {
-	receivedPaths := make([]string, 0, 2)
+func TestMetricsSenderSendMetrics(t *testing.T) {
+	receivedMetrics := make([]models.Metrics, 0, 2)
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		receivedPaths = append(receivedPaths, request.URL.Path)
+		metric, err := decodeGzipMetric(request)
+		if err != nil {
+			t.Errorf("read compressed metric: %v", err)
+			response.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		receivedMetrics = append(receivedMetrics, metric)
 
 		response.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
 
-	storage := newMetricStorage()
-	storage.updateMetrics(
+	store := newMetricsStore()
+	store.update(
 		map[string]float64{
 			"Alloc": 42.5,
 		},
@@ -81,41 +110,66 @@ func TestMetricSenderSendMetricsInternal(t *testing.T) {
 		},
 	)
 
-	sender := newMetricSender(server.URL, time.Second)
-	sender.sendMetricsInternal(storage)
+	sender := newMetricsSender(server.URL, time.Second)
+	sender.sendMetrics(store)
 
-	wantPaths := map[string]bool{
-		"/update/gauge/Alloc/42.5":    true,
-		"/update/counter/PollCount/2": true,
+	gaugeValue := 42.5
+	counterDelta := int64(2)
+	wantMetrics := map[string]models.Metrics{
+		"Alloc": {
+			ID:    "Alloc",
+			MType: models.Gauge,
+			Value: &gaugeValue,
+		},
+		"PollCount": {
+			ID:    "PollCount",
+			MType: models.Counter,
+			Delta: &counterDelta,
+		},
 	}
-	gotPaths := map[string]bool{}
-	for _, path := range receivedPaths {
-		gotPaths[path] = true
+	gotMetrics := make(map[string]models.Metrics, len(receivedMetrics))
+	for _, metric := range receivedMetrics {
+		gotMetrics[metric.ID] = metric
 	}
 
-	if !reflect.DeepEqual(gotPaths, wantPaths) {
-		t.Fatalf("paths = %v, want %v", gotPaths, wantPaths)
+	if !reflect.DeepEqual(gotMetrics, wantMetrics) {
+		t.Fatalf("metrics = %v, want %v", gotMetrics, wantMetrics)
 	}
 }
 
-func TestMetricSenderKeepsCounterAfterFailedSend(t *testing.T) {
+func decodeGzipMetric(request *http.Request) (models.Metrics, error) {
+	reader, err := gzip.NewReader(request.Body)
+	if err != nil {
+		return models.Metrics{}, err
+	}
+	defer reader.Close()
+
+	var metric models.Metrics
+	if err := json.NewDecoder(reader).Decode(&metric); err != nil {
+		return models.Metrics{}, err
+	}
+
+	return metric, nil
+}
+
+func TestMetricsSenderKeepsCounterAfterFailedSend(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		response.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
 
-	storage := newMetricStorage()
-	storage.updateMetrics(
+	store := newMetricsStore()
+	store.update(
 		nil,
 		map[string]int64{
 			"PollCount": 2,
 		},
 	)
 
-	sender := newMetricSender(server.URL, time.Second)
-	sender.sendMetricsInternal(storage)
+	sender := newMetricsSender(server.URL, time.Second)
+	sender.sendMetrics(store)
 
-	assertAllMetrics(t, storage.snapshot(), allMetrics{
+	assertMetricsSnapshot(t, store.snapshot(), metricsSnapshot{
 		gauges: map[string]float64{},
 		counters: map[string]int64{
 			"PollCount": 2,

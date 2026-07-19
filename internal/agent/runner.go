@@ -3,11 +3,11 @@ package agent
 import "time"
 
 func Run(serverAddress string, pollInterval time.Duration, reportInterval time.Duration) {
-	metricStorage := newMetricStorage()
-	gatherMetricsInternal(metricStorage)
+	store := newMetricsStore()
+	collectMetrics(store)
 
-	metricSender := newMetricSender(serverAddress, reportInterval)
+	sender := newMetricsSender(serverAddress, reportInterval)
 
-	go gatherMetrics(metricStorage, pollInterval)
-	metricSender.sendMetrics(metricStorage)
+	go runCollector(store, pollInterval)
+	sender.run(store)
 }
