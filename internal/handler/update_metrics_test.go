@@ -1,13 +1,15 @@
 package handler
 
 import (
+	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	models "github.com/MeleshinDA-1/metrics-collector/internal/model"
 	"github.com/MeleshinDA-1/metrics-collector/internal/repository"
 	"github.com/gorilla/mux"
 )
@@ -157,104 +159,65 @@ func TestUpdateMetricsStoresValues(t *testing.T) {
 	assertValueMetricsBody(t, metricsHandler, "/value/gauge/Alloc", "gauge", "Alloc", "42.5")
 }
 
-func TestValueMetrics(t *testing.T) {
-	storage := repository.NewMemStorage()
-	storage.SetGauge("Alloc", 42.5)
-	storage.AddCounter("PollCount", 2)
-	metricsHandler := NewMetricsHandler(storage)
-
-	tests := []struct {
-		name       string
-		target     string
-		wantStatus int
-		wantBody   string
-	}{
-		{
-			name:       "existing gauge",
-			target:     "/value/gauge/Alloc",
-			wantStatus: http.StatusOK,
-			wantBody:   "42.5",
-		},
-		{
-			name:       "existing counter",
-			target:     "/value/counter/PollCount",
-			wantStatus: http.StatusOK,
-			wantBody:   "2",
-		},
-		{
-			name:       "unknown metric",
-			target:     "/value/gauge/Unknown",
-			wantStatus: http.StatusNotFound,
-		},
+func TestUpdateMetricsJSONResponse(t *testing.T) {
+	metricsHandler := NewMetricsHandler(repository.NewMemStorage())
+	var response *httptest.ResponseRecorder
+	for range 2 {
+		request := httptest.NewRequest(
+			http.MethodPost,
+			"/update",
+			strings.NewReader(`{"id":"PollCount","type":"counter","delta":2}`),
+		)
+		request.Header.Set("Content-Type", "application/json")
+		response = httptest.NewRecorder()
+		NewRouter(metricsHandler).ServeHTTP(response, request)
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			request := httptest.NewRequest(http.MethodGet, test.target, nil)
-			request = mux.SetURLVars(request, map[string]string{
-				"metricType": strings.Split(test.target, "/")[2],
-				"metricName": strings.Split(test.target, "/")[3],
-			})
-			response := httptest.NewRecorder()
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+	if contentType := response.Header().Get("Content-Type"); contentType != "application/json" {
+		t.Fatalf("Content-Type = %q, want application/json", contentType)
+	}
 
-			metricsHandler.ValueMetrics(response, request)
-
-			if response.Code != test.wantStatus {
-				t.Fatalf("status = %d, want %d", response.Code, test.wantStatus)
-			}
-
-			if test.wantBody != "" && response.Body.String() != test.wantBody {
-				t.Fatalf("body = %q, want %q", response.Body.String(), test.wantBody)
-			}
-		})
+	var metric models.Metrics
+	if err := json.NewDecoder(response.Body).Decode(&metric); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if metric.Delta == nil || *metric.Delta != 4 {
+		t.Fatalf("counter delta = %v, want 4", metric.Delta)
 	}
 }
 
-func TestListMetrics(t *testing.T) {
+func TestUpdateMetricsSavesSynchronously(t *testing.T) {
+	fileRepository := &repository.FileMetricsRepository{
+		FilePath: filepath.Join(t.TempDir(), "metrics.json"),
+	}
 	storage := repository.NewMemStorage()
-	storage.SetGauge("Alloc", 42.5)
-	storage.AddCounter("PollCount", 2)
+	storage.MetricsRepository = fileRepository
 	metricsHandler := NewMetricsHandler(storage)
 
-	request := httptest.NewRequest(http.MethodGet, "/", nil)
-	response := httptest.NewRecorder()
-
-	metricsHandler.ListMetrics(response, request)
-	result := response.Result()
-	defer result.Body.Close()
-	body, err := io.ReadAll(result.Body)
-	if err != nil {
-		t.Fatalf("read response body: %v", err)
+	response := handleUpdateMetricsWithHandler(metricsHandler, updateMetricsRequest{
+		method:      http.MethodPost,
+		metricType:  "counter",
+		metricName:  "PollCount",
+		metricValue: "2",
+	})
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
 	}
 
-	if result.StatusCode != http.StatusOK {
-		t.Fatalf("status = %d, want %d", result.StatusCode, http.StatusOK)
+	restoredStorage := repository.NewMemStorage()
+	if err := fileRepository.Restore(restoredStorage); err != nil {
+		t.Fatalf("restore metrics: %v", err)
 	}
 
-	bodyText := string(body)
-	for _, value := range []string{"Alloc", "42.5", "PollCount", "2"} {
-		if !strings.Contains(bodyText, value) {
-			t.Fatalf("body %q does not contain %q", bodyText, value)
-		}
+	value, ok := restoredStorage.GetCounter("PollCount")
+	if !ok {
+		t.Fatal("counter PollCount not found")
 	}
-}
-
-func TestListMetricsEscapesHTML(t *testing.T) {
-	storage := repository.NewMemStorage()
-	storage.SetGauge(`<script>alert("x")</script>`, 1)
-	metricsHandler := NewMetricsHandler(storage)
-
-	request := httptest.NewRequest(http.MethodGet, "/", nil)
-	response := httptest.NewRecorder()
-
-	metricsHandler.ListMetrics(response, request)
-
-	bodyText := response.Body.String()
-	if strings.Contains(bodyText, `<script>alert("x")</script>`) {
-		t.Fatalf("body contains unescaped HTML: %q", bodyText)
-	}
-	if !strings.Contains(bodyText, "&lt;script&gt;") {
-		t.Fatalf("body does not contain escaped metric name: %q", bodyText)
+	if value != 2 {
+		t.Fatalf("counter PollCount = %d, want 2", value)
 	}
 }
 

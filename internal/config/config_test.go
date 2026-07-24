@@ -65,7 +65,7 @@ func TestParseConfigReturnsMissingEnvTagError(t *testing.T) {
 
 func TestParseConfigReturnsUnsupportedFlagTypeError(t *testing.T) {
 	type invalidConfig struct {
-		Count int `env:"COUNT" flag:"c,default=1"`
+		Count float64 `env:"COUNT" flag:"c,default=1"`
 	}
 
 	_, err := ParseConfig[invalidConfig](nil)
@@ -76,19 +76,34 @@ func TestParseConfigReturnsUnsupportedFlagTypeError(t *testing.T) {
 
 func TestParseServerConfig(t *testing.T) {
 	tests := []struct {
-		name        string
-		args        []string
-		wantAddress string
-		wantError   bool
+		name       string
+		args       []string
+		wantConfig ServerConfig
+		wantError  bool
 	}{
 		{
-			name:        "default address",
-			wantAddress: "localhost:8080",
+			name: "defaults",
+			wantConfig: ServerConfig{
+				Address:         "localhost:8080",
+				StoreInterval:   300,
+				FileStoragePath: "metricsDataDefault",
+				Restore:         true,
+			},
 		},
 		{
-			name:        "custom address",
-			args:        []string{"-a", "localhost:8888"},
-			wantAddress: "localhost:8888",
+			name: "custom values",
+			args: []string{
+				"-a", "localhost:8888",
+				"-i", "0",
+				"-f", "metrics.json",
+				"-r=false",
+			},
+			wantConfig: ServerConfig{
+				Address:         "localhost:8888",
+				StoreInterval:   0,
+				FileStoragePath: "metrics.json",
+				Restore:         false,
+			},
 		},
 		{
 			name:      "unknown flag",
@@ -110,10 +125,37 @@ func TestParseServerConfig(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if config.Address != test.wantAddress {
-				t.Fatalf("address = %q, want %q", config.Address, test.wantAddress)
+			if config != test.wantConfig {
+				t.Fatalf("config = %+v, want %+v", config, test.wantConfig)
 			}
 		})
+	}
+}
+
+func TestParseServerConfigEnvironmentOverridesFlags(t *testing.T) {
+	t.Setenv("ADDRESS", "")
+	t.Setenv("STORE_INTERVAL", "15")
+	t.Setenv("FILE_STORAGE_PATH", "")
+	t.Setenv("RESTORE", "")
+
+	config, err := ParseConfig[ServerConfig]([]string{
+		"-a", "localhost:8888",
+		"-i", "10",
+		"-f", "metrics.json",
+		"-r=false",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	want := ServerConfig{
+		Address:         "localhost:8888",
+		StoreInterval:   15,
+		FileStoragePath: "metrics.json",
+		Restore:         false,
+	}
+	if config != want {
+		t.Fatalf("config = %+v, want %+v", config, want)
 	}
 }
 
@@ -134,7 +176,7 @@ func TestParseAgentConfig(t *testing.T) {
 		},
 		{
 			name:               "custom values",
-			args:               []string{"-a", "localhost:8888", "-r", "3s", "-p", "1s"},
+			args:               []string{"-a", "localhost:8888", "-r", "3", "-p", "1"},
 			wantServerAddress:  "localhost:8888",
 			wantReportInterval: 3 * time.Second,
 			wantPollInterval:   time.Second,
@@ -169,5 +211,23 @@ func TestParseAgentConfig(t *testing.T) {
 				t.Fatalf("poll interval = %s, want %s", config.PollInterval, test.wantPollInterval)
 			}
 		})
+	}
+}
+
+func TestParseAgentConfigEnvironmentIntervalsInSeconds(t *testing.T) {
+	t.Setenv("ADDRESS", "localhost:8888")
+	t.Setenv("REPORT_INTERVAL", "5")
+	t.Setenv("POLL_INTERVAL", "1")
+
+	config, err := ParseConfig[AgentConfig](nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if config.ReportInterval != 5*time.Second {
+		t.Fatalf("report interval = %s, want %s", config.ReportInterval, 5*time.Second)
+	}
+	if config.PollInterval != time.Second {
+		t.Fatalf("poll interval = %s, want %s", config.PollInterval, time.Second)
 	}
 }

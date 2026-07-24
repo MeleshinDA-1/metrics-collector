@@ -4,9 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,7 +20,10 @@ type AgentConfig struct {
 }
 
 type ServerConfig struct {
-	Address string `env:"ADDRESS" flag:"a,default=localhost:8080" usage:"HTTP server address"`
+	Address         string `env:"ADDRESS" flag:"a,default=localhost:8080" usage:"HTTP server address"`
+	StoreInterval   int    `env:"STORE_INTERVAL" flag:"i,default=300" usage:"metrics store interval in seconds"`
+	FileStoragePath string `env:"FILE_STORAGE_PATH" flag:"f,default=metricsDataDefault" usage:"metrics storage path"`
+	Restore         bool   `env:"RESTORE" flag:"r,default=true" usage:"should load metrics data from storage"`
 }
 
 func ParseAgentConfig() (AgentConfig, error) {
@@ -32,64 +35,47 @@ func ParseServerConfig() (ServerConfig, error) {
 }
 
 func ParseConfig[T any](args []string) (T, error) {
-	cfg, ok, err := parseConfigFromEnv[T]()
+	cfg, err := parseConfigFromFlags[T](args)
 	if err != nil {
 		return *new(T), err
 	}
-	if ok {
-		log.Println("Using config from env:", cfg)
-		return cfg, nil
-	}
 
-	cfg, err = parseConfigFromFlags[T](args)
-	if err != nil {
+	if err := parseConfigFromEnv(&cfg); err != nil {
 		return *new(T), err
 	}
 
 	return cfg, nil
 }
 
-func isAllEnvArgsFound[T any]() (bool, error) {
+func validateEnvTags[T any]() error {
 	typeValue := reflect.TypeOf((*T)(nil)).Elem()
 
 	for _, field := range reflect.VisibleFields(typeValue) {
 		envTag := field.Tag.Get("env")
 		if envTag == "" {
-			return false, fmt.Errorf("type %v: field %s has no env tag", typeValue, field.Name)
-		}
-		if !isEnvSet(envTag) {
-			return false, nil
+			return fmt.Errorf("type %v: field %s has no env tag", typeValue, field.Name)
 		}
 	}
 
-	return true, nil
+	return nil
 }
 
-func isEnvSet(name string) bool {
-	_, ok := os.LookupEnv(name)
-	return ok
-}
-
-func parseConfigFromEnv[T any]() (T, bool, error) {
-	allEnvArgsFound, err := isAllEnvArgsFound[T]()
-	if err != nil {
-		return *new(T), false, err
-	}
-	if !allEnvArgsFound {
-		return *new(T), false, nil
+func parseConfigFromEnv[T any](cfg *T) error {
+	if err := validateEnvTags[T](); err != nil {
+		return err
 	}
 
-	cfg, err := env.ParseAsWithOptions[T](env.Options{
+	err := env.ParseWithOptions(cfg, env.Options{
 		FuncMap: map[reflect.Type]env.ParserFunc{
 			reflect.TypeOf(time.Duration(0)): func(s string) (interface{}, error) {
-				return time.ParseDuration(s)
+				return parseDuration(s)
 			},
 		}})
 	if err != nil {
-		return *new(T), false, fmt.Errorf("parse config from environment: %w", err)
+		return fmt.Errorf("parse config from environment: %w", err)
 	}
 
-	return cfg, true, nil
+	return nil
 }
 
 func parseConfigFromFlags[T any](args []string) (T, error) {
@@ -126,14 +112,39 @@ func registerFlag[T any](flagSet *flag.FlagSet, field reflect.StructField, obj *
 			usage,
 		)
 	case reflect.TypeOf(time.Duration(0)):
-		duration, err := time.ParseDuration(defaultValue)
+		duration, err := parseDuration(defaultValue)
 		if err != nil {
 			return fmt.Errorf("field %s: parse default duration %q: %w", field.Name, defaultValue, err)
 		}
-		flagSet.DurationVar(
-			fieldValue.Addr().Interface().(*time.Duration),
+		fieldValue.SetInt(int64(duration))
+		flagSet.Func(paramName, usage, func(value string) error {
+			duration, err := parseDuration(value)
+			if err != nil {
+				return err
+			}
+			fieldValue.SetInt(int64(duration))
+			return nil
+		})
+	case reflect.TypeOf(0):
+		value, err := strconv.Atoi(defaultValue)
+		if err != nil {
+			return fmt.Errorf("field %s: parse default int %q: %w", field.Name, defaultValue, err)
+		}
+		flagSet.IntVar(
+			fieldValue.Addr().Interface().(*int),
 			paramName,
-			duration,
+			value,
+			usage,
+		)
+	case reflect.TypeOf(false):
+		value, err := strconv.ParseBool(defaultValue)
+		if err != nil {
+			return fmt.Errorf("field %s: parse default bool %q: %w", field.Name, defaultValue, err)
+		}
+		flagSet.BoolVar(
+			fieldValue.Addr().Interface().(*bool),
+			paramName,
+			value,
 			usage,
 		)
 	default:
@@ -141,6 +152,15 @@ func registerFlag[T any](flagSet *flag.FlagSet, field reflect.StructField, obj *
 	}
 
 	return nil
+}
+
+func parseDuration(value string) (time.Duration, error) {
+	seconds, err := strconv.Atoi(value)
+	if err == nil {
+		return time.Duration(seconds) * time.Second, nil
+	}
+
+	return time.ParseDuration(value)
 }
 
 func parseTagFlagForConfig(field reflect.StructField) (string, string) {
