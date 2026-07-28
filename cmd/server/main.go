@@ -8,12 +8,12 @@ import (
 )
 
 func main() {
-	serverConfig, err := config.ParseServerConfigFromArgs()
+	serverConfig, err := config.ParseServerConfig()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if err := server.Run(serverConfig.Address); err != nil {
+	if err := server.Run(serverConfig); err != nil {
 		log.Fatal(err)
 	}
 }

@@ -6,24 +6,24 @@ import (
 	"time"
 )
 
-func gatherMetrics(metricStorage *metricStorage, pollingInterval time.Duration) {
+func runCollector(store *metricsStore, pollInterval time.Duration) {
 	for {
-		time.Sleep(pollingInterval)
-		gatherMetricsInternal(metricStorage)
+		time.Sleep(pollInterval)
+		collectMetrics(store)
 	}
 }
 
-func gatherMetricsInternal(metricStorage *metricStorage) {
-	metricStorage.updateMetrics(gatherGauge(), gatherCounter())
+func collectMetrics(store *metricsStore) {
+	store.update(collectGauges(), collectCounters())
 }
 
-func gatherCounter() map[string]int64 {
+func collectCounters() map[string]int64 {
 	return map[string]int64{
 		"PollCount": 1,
 	}
 }
 
-func gatherGauge() map[string]float64 {
+func collectGauges() map[string]float64 {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 

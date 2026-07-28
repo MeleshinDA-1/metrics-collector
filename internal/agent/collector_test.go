@@ -2,16 +2,16 @@ package agent
 
 import "testing"
 
-func TestGatherCounter(t *testing.T) {
-	counters := gatherCounter()
+func TestCollectCounters(t *testing.T) {
+	counters := collectCounters()
 
 	if counters["PollCount"] != 1 {
 		t.Fatalf("PollCount = %d, want %d", counters["PollCount"], 1)
 	}
 }
 
-func TestGatherGauge(t *testing.T) {
-	gauges := gatherGauge()
+func TestCollectGauges(t *testing.T) {
+	gauges := collectGauges()
 	requiredMetrics := []string{
 		"Alloc",
 		"BuckHashSys",
@@ -50,11 +50,11 @@ func TestGatherGauge(t *testing.T) {
 	}
 }
 
-func TestGatherMetricsInternal(t *testing.T) {
-	storage := newMetricStorage()
+func TestCollectMetrics(t *testing.T) {
+	store := newMetricsStore()
 
-	gatherMetricsInternal(storage)
-	metrics := storage.snapshot()
+	collectMetrics(store)
+	metrics := store.snapshot()
 
 	if metrics.counters["PollCount"] != 1 {
 		t.Fatalf("PollCount = %d, want %d", metrics.counters["PollCount"], 1)

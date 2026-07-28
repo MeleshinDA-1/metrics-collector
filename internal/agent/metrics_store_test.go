@@ -5,22 +5,22 @@ import (
 	"testing"
 )
 
-type metricStorageUpdate struct {
+type metricsUpdate struct {
 	gauges   map[string]float64
 	counters map[string]int64
 }
 
-type metricStorageCase struct {
+type metricsStoreTestCase struct {
 	name    string
-	updates []metricStorageUpdate
-	want    allMetrics
+	updates []metricsUpdate
+	want    metricsSnapshot
 }
 
-func TestMetricStorageUpdateMetrics(t *testing.T) {
-	tests := []metricStorageCase{
+func TestMetricsStoreUpdate(t *testing.T) {
+	tests := []metricsStoreTestCase{
 		{
 			name: "gauges are overwritten",
-			updates: []metricStorageUpdate{
+			updates: []metricsUpdate{
 				{
 					gauges: map[string]float64{
 						"Alloc": 10,
@@ -32,7 +32,7 @@ func TestMetricStorageUpdateMetrics(t *testing.T) {
 					},
 				},
 			},
-			want: allMetrics{
+			want: metricsSnapshot{
 				gauges: map[string]float64{
 					"Alloc": 42,
 				},
@@ -41,7 +41,7 @@ func TestMetricStorageUpdateMetrics(t *testing.T) {
 		},
 		{
 			name: "counters are accumulated",
-			updates: []metricStorageUpdate{
+			updates: []metricsUpdate{
 				{
 					counters: map[string]int64{
 						"Requests": 10,
@@ -53,7 +53,7 @@ func TestMetricStorageUpdateMetrics(t *testing.T) {
 					},
 				},
 			},
-			want: allMetrics{
+			want: metricsSnapshot{
 				gauges: map[string]float64{},
 				counters: map[string]int64{
 					"Requests": 15,
@@ -62,7 +62,7 @@ func TestMetricStorageUpdateMetrics(t *testing.T) {
 		},
 		{
 			name: "poll count is incremented after two updates",
-			updates: []metricStorageUpdate{
+			updates: []metricsUpdate{
 				{
 					counters: map[string]int64{
 						"PollCount": 1,
@@ -74,7 +74,7 @@ func TestMetricStorageUpdateMetrics(t *testing.T) {
 					},
 				},
 			},
-			want: allMetrics{
+			want: metricsSnapshot{
 				gauges: map[string]float64{},
 				counters: map[string]int64{
 					"PollCount": 2,
@@ -85,20 +85,20 @@ func TestMetricStorageUpdateMetrics(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			storage := newMetricStorage()
+			store := newMetricsStore()
 
 			for _, update := range test.updates {
-				storage.updateMetrics(update.gauges, update.counters)
+				store.update(update.gauges, update.counters)
 			}
 
-			assertAllMetrics(t, storage.snapshot(), test.want)
+			assertMetricsSnapshot(t, store.snapshot(), test.want)
 		})
 	}
 }
 
-func TestMetricStorageSnapshotReturnsCopies(t *testing.T) {
-	storage := newMetricStorage()
-	storage.updateMetrics(
+func TestMetricsStoreSnapshotReturnsCopies(t *testing.T) {
+	store := newMetricsStore()
+	store.update(
 		map[string]float64{
 			"Alloc": 42,
 		},
@@ -107,11 +107,11 @@ func TestMetricStorageSnapshotReturnsCopies(t *testing.T) {
 		},
 	)
 
-	snapshot := storage.snapshot()
+	snapshot := store.snapshot()
 	snapshot.gauges["Alloc"] = 100
 	snapshot.counters["PollCount"] = 100
 
-	assertAllMetrics(t, storage.snapshot(), allMetrics{
+	assertMetricsSnapshot(t, store.snapshot(), metricsSnapshot{
 		gauges: map[string]float64{
 			"Alloc": 42,
 		},
@@ -121,7 +121,7 @@ func TestMetricStorageSnapshotReturnsCopies(t *testing.T) {
 	})
 }
 
-func assertAllMetrics(t *testing.T, got allMetrics, want allMetrics) {
+func assertMetricsSnapshot(t *testing.T, got metricsSnapshot, want metricsSnapshot) {
 	t.Helper()
 
 	if !reflect.DeepEqual(got.gauges, want.gauges) {

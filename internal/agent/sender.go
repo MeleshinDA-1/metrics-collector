@@ -1,105 +1,73 @@
 package agent
 
 import (
-	"fmt"
 	"log/slog"
 	"net/http"
-	"strconv"
-	"strings"
 	"time"
+
+	models "github.com/MeleshinDA-1/metrics-collector/internal/model"
 )
 
-const (
-	requestTimeout = 3 * time.Second
-)
-
-type metricSender struct {
-	client         *http.Client
-	urlBase        string
+type metricsSender struct {
+	httpClient     *http.Client
+	updateURL      string
 	reportInterval time.Duration
 }
 
-func newMetricSender(serverAddress string, reportInterval time.Duration) *metricSender {
-	return &metricSender{
-		client: &http.Client{
+func newMetricsSender(serverAddress string, reportInterval time.Duration) *metricsSender {
+	return &metricsSender{
+		httpClient: &http.Client{
 			Timeout: requestTimeout,
 		},
-		urlBase:        normalizeServerAddress(serverAddress) + "/update/%s/%s/%s",
+		updateURL:      normalizeServerAddress(serverAddress) + "/update",
 		reportInterval: reportInterval,
 	}
 }
 
-func (metricSender *metricSender) sendMetrics(metricStorage *metricStorage) {
+func (sender *metricsSender) run(store *metricsStore) {
 	for {
-		metricSender.sendMetricsInternal(metricStorage)
-		time.Sleep(metricSender.reportInterval)
+		sender.sendMetrics(store)
+		time.Sleep(sender.reportInterval)
 	}
 }
 
-func (metricSender *metricSender) sendMetricsInternal(metricStorage *metricStorage) {
-	metrics := metricStorage.snapshot()
-
-	for metricName, metricValue := range metrics.gauges {
-		err := metricSender.sendMetric("gauge", metricName, strconv.FormatFloat(metricValue, 'f', -1, 64))
+func (sender *metricsSender) sendMetrics(store *metricsStore) {
+	snapshot := store.snapshot()
+	metric := models.Metrics{MType: models.Gauge}
+	for metricName, metricValue := range snapshot.gauges {
+		metric.ID = metricName
+		metric.Value = &metricValue
+		err := sender.sendMetric(metric)
 		if err != nil {
 			slog.Error("failed to send gauge", "metric", metricName, "err", err)
 		}
 	}
 
-	metricSender.sendCounters(metricStorage, metrics)
+	sender.sendCounters(store, snapshot.counters)
 }
 
-func (metricSender *metricSender) sendCounters(metricStorage *metricStorage, metrics allMetrics) {
-	for metricName, metricValue := range metrics.counters {
-		err := metricSender.sendMetric("counter", metricName, strconv.FormatInt(metricValue, 10))
+func (sender *metricsSender) sendCounters(store *metricsStore, counters map[string]int64) {
+	metric := models.Metrics{MType: models.Counter}
+	for metricName, metricValue := range counters {
+		metric.ID = metricName
+		metric.Delta = &metricValue
+		err := sender.sendMetric(metric)
 		if err != nil {
 			slog.Error("failed to send counter", "metric", metricName, "err", err)
 			continue
 		}
 
-		metricStorage.markCounterSent(metricName, metricValue)
+		store.acknowledgeCounter(metricName, metricValue)
 	}
 }
 
-func (metricStorage *metricStorage) markCounterSent(counterName string, valueSent int64) {
-	metricStorage.mutex.Lock()
-	defer metricStorage.mutex.Unlock()
-
-	currentValue := metricStorage.allMetrics.counters[counterName]
-	if currentValue <= valueSent {
-		metricStorage.allMetrics.counters[counterName] = 0
-		return
-	}
-
-	metricStorage.allMetrics.counters[counterName] = currentValue - valueSent
-}
-
-func (metricSender *metricSender) sendMetric(metricType string, metricName string, metricValue string) error {
-	url := fmt.Sprintf(metricSender.urlBase, metricType, metricName, metricValue)
-	req, err := http.NewRequest(http.MethodPost, url, nil)
+func (sender *metricsSender) sendMetric(metric models.Metrics) error {
+	body, err := buildRequestBody(
+		withGzipCompression(encodeJSON(metric)),
+	)
 	if err != nil {
 		return err
 	}
 
-	req.Header.Set("Content-Type", "text/plain")
-	resp, err := metricSender.client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status: %d", resp.StatusCode)
-	}
-
-	return nil
-}
-
-func normalizeServerAddress(serverAddress string) string {
-	serverAddress = strings.TrimRight(serverAddress, "/")
-	if strings.HasPrefix(serverAddress, "http://") || strings.HasPrefix(serverAddress, "https://") {
-		return serverAddress
-	}
-
-	return "http://" + serverAddress
+	return sender.postUpdate(body)
 }
