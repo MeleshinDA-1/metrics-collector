@@ -17,10 +17,6 @@ type MetricsStorage interface {
 	Snapshot() MetricsSnapshot
 }
 
-type MetricsSaver interface {
-	Save() error
-}
-
 type MetricsHandler struct {
 	storage MetricsStorage
 }
@@ -29,15 +25,6 @@ func NewMetricsHandler(storage MetricsStorage) *MetricsHandler {
 	return &MetricsHandler{
 		storage: storage,
 	}
-}
-
-func (handler *MetricsHandler) saveMetrics() error {
-	storage, ok := handler.storage.(MetricsSaver)
-	if !ok {
-		return nil
-	}
-
-	return storage.Save()
 }
 
 func pathValue(req *http.Request, name string) string {

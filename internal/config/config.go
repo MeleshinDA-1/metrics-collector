@@ -47,24 +47,7 @@ func ParseConfig[T any](args []string) (T, error) {
 	return cfg, nil
 }
 
-func validateEnvTags[T any]() error {
-	typeValue := reflect.TypeOf((*T)(nil)).Elem()
-
-	for _, field := range reflect.VisibleFields(typeValue) {
-		envTag := field.Tag.Get("env")
-		if envTag == "" {
-			return fmt.Errorf("type %v: field %s has no env tag", typeValue, field.Name)
-		}
-	}
-
-	return nil
-}
-
 func parseConfigFromEnv[T any](cfg *T) error {
-	if err := validateEnvTags[T](); err != nil {
-		return err
-	}
-
 	err := env.ParseWithOptions(cfg, env.Options{
 		FuncMap: map[reflect.Type]env.ParserFunc{
 			reflect.TypeOf(time.Duration(0)): func(s string) (interface{}, error) {
@@ -99,7 +82,12 @@ func parseConfigFromFlags[T any](args []string) (T, error) {
 }
 
 func registerFlag[T any](flagSet *flag.FlagSet, field reflect.StructField, obj *T) error {
-	paramName, defaultValue := parseTagFlagForConfig(field)
+	parsedTag, err := parseTagFlagForConfig(field)
+	if err != nil {
+		return err
+	}
+	paramName := parsedTag.name
+	defaultValue := parsedTag.defaultValue
 	usage := parseTagUsageForConfig(field)
 	fieldValue := reflect.ValueOf(obj).Elem().FieldByIndex(field.Index)
 
@@ -163,27 +151,28 @@ func parseDuration(value string) (time.Duration, error) {
 	return time.ParseDuration(value)
 }
 
-func parseTagFlagForConfig(field reflect.StructField) (string, string) {
+type flagTag struct {
+	name         string
+	defaultValue string
+}
+
+func parseTagFlagForConfig(field reflect.StructField) (flagTag, error) {
 	tagValue := field.Tag.Get("flag")
-	split := strings.SplitN(tagValue, ",", 2)
-	if len(split) != 2 {
-		panic(fmt.Sprintf(
-			"type field %s: invalid flag tag %q, expected name,default=value",
+	paramName, defaultTag, hasSeparator := strings.Cut(tagValue, ",")
+	defaultValue, hasDefault := strings.CutPrefix(defaultTag, "default=")
+	if !hasSeparator || !hasDefault {
+		return flagTag{}, fmt.Errorf(
+			"type field %s: invalid flag tag %q; expected format %q",
 			field.Name,
 			tagValue,
-		))
+			"<name>,default=<value>",
+		)
 	}
 
-	paramName := split[0]
-	defaultValue, ok := strings.CutPrefix(split[1], "default=")
-	if !ok {
-		panic(fmt.Sprintf(
-			"type field %s: invalid flag tag %q, expected name,default=value",
-			field.Name,
-			tagValue,
-		))
-	}
-	return paramName, defaultValue
+	return flagTag{
+		name:         paramName,
+		defaultValue: defaultValue,
+	}, nil
 }
 
 func parseTagUsageForConfig(field reflect.StructField) string {

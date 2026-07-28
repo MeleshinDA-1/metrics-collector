@@ -16,7 +16,15 @@ type FileMetricsRepository struct {
 	mutex    sync.Mutex
 }
 
-func (repo *FileMetricsRepository) Flush(memStorage *MemStorage) error {
+type MetricsSnapshotProvider interface {
+	Snapshot() models.MetricsSnapshot
+}
+
+type MetricsRepository interface {
+	Flush(MetricsSnapshotProvider) error
+}
+
+func (repo *FileMetricsRepository) Flush(storage MetricsSnapshotProvider) error {
 	repo.mutex.Lock()
 	defer repo.mutex.Unlock()
 
@@ -26,7 +34,7 @@ func (repo *FileMetricsRepository) Flush(memStorage *MemStorage) error {
 	}
 	defer file.Close()
 
-	snapshot := memStorage.Snapshot()
+	snapshot := storage.Snapshot()
 	metrics := make([]models.Metrics, 0, len(snapshot.Gauges)+len(snapshot.Counters))
 
 	for name, value := range snapshot.Gauges {

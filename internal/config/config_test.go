@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-func TestParseTagFlagForConfigPanicsOnInvalidTag(t *testing.T) {
+func TestParseTagFlagForConfigReturnsErrorOnInvalidTag(t *testing.T) {
 	tests := []struct {
 		name string
 		tag  reflect.StructTag
@@ -19,13 +19,10 @@ func TestParseTagFlagForConfigPanicsOnInvalidTag(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			field := reflect.StructField{Name: "Address", Tag: test.tag}
 
-			defer func() {
-				if recover() == nil {
-					t.Fatal("parseTagFlagForConfig did not panic")
-				}
-			}()
-
-			parseTagFlagForConfig(field)
+			_, err := parseTagFlagForConfig(field)
+			if err == nil {
+				t.Fatal("parseTagFlagForConfig error = nil, want non-nil")
+			}
 		})
 	}
 }
@@ -52,14 +49,20 @@ func TestParseConfigReturnsInvalidDefaultDurationError(t *testing.T) {
 	}
 }
 
-func TestParseConfigReturnsMissingEnvTagError(t *testing.T) {
-	type invalidConfig struct {
-		Address string `flag:"a,default=localhost:8080"`
+func TestConfigFieldsHaveEnvTags(t *testing.T) {
+	configTypes := []reflect.Type{
+		reflect.TypeOf(AgentConfig{}),
+		reflect.TypeOf(ServerConfig{}),
 	}
 
-	_, err := ParseConfig[invalidConfig](nil)
-	if err == nil {
-		t.Fatal("ParseConfig error = nil, want non-nil")
+	for _, configType := range configTypes {
+		t.Run(configType.Name(), func(t *testing.T) {
+			for _, field := range reflect.VisibleFields(configType) {
+				if field.Tag.Get("env") == "" {
+					t.Errorf("%s.%s has no env tag", configType.Name(), field.Name)
+				}
+			}
+		})
 	}
 }
 

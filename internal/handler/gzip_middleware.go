@@ -7,12 +7,12 @@ import (
 	"strings"
 )
 
-type CompressingResponseWriter struct {
+type compressingResponseWriter struct {
 	http.ResponseWriter
 	gzipWriter *gzip.Writer
 }
 
-func (w *CompressingResponseWriter) enableGzip() {
+func (w *compressingResponseWriter) enableGzip() {
 	if w.gzipWriter != nil {
 		return
 	}
@@ -22,7 +22,7 @@ func (w *CompressingResponseWriter) enableGzip() {
 	w.gzipWriter = gzip.NewWriter(w.ResponseWriter)
 }
 
-func (w *CompressingResponseWriter) Write(data []byte) (int, error) {
+func (w *compressingResponseWriter) Write(data []byte) (int, error) {
 	contentType := w.Header().Get("Content-Type")
 
 	if IsCompressionAllowedForType(contentType) {
@@ -33,7 +33,7 @@ func (w *CompressingResponseWriter) Write(data []byte) (int, error) {
 	return w.ResponseWriter.Write(data)
 }
 
-func (w *CompressingResponseWriter) WriteHeader(statusCode int) {
+func (w *compressingResponseWriter) WriteHeader(statusCode int) {
 	contentType := w.Header().Get("Content-Type")
 	if IsCompressionAllowedForType(contentType) {
 		w.enableGzip()
@@ -42,7 +42,7 @@ func (w *CompressingResponseWriter) WriteHeader(statusCode int) {
 	w.ResponseWriter.WriteHeader(statusCode)
 }
 
-func (w *CompressingResponseWriter) Close() error {
+func (w *compressingResponseWriter) Close() error {
 	if w.gzipWriter == nil {
 		return nil
 	}
@@ -66,7 +66,7 @@ func CompressingMiddleware(next http.Handler) http.Handler {
 
 		responseWriter := w
 		if CanClientAcceptEncoding(r) {
-			compressingWriter := &CompressingResponseWriter{
+			compressingWriter := &compressingResponseWriter{
 				ResponseWriter: w,
 			}
 			defer func() {

@@ -15,6 +15,10 @@ type Flusher struct {
 }
 
 func NewFlusher(storage *repository.MemStorage, metricsRepository repository.MetricsRepository) *Flusher {
+	if metricsRepository == nil {
+		panic("metrics repository is required")
+	}
+
 	f := &Flusher{
 		memStorage:        storage,
 		metricsRepository: metricsRepository,

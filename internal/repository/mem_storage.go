@@ -10,12 +10,6 @@ type MemStorage struct {
 	mutex    sync.Mutex
 	gauges   map[string]float64
 	counters map[string]int64
-
-	MetricsRepository
-}
-
-type MetricsRepository interface {
-	Flush(*MemStorage) error
 }
 
 func NewMemStorage() *MemStorage {
@@ -23,14 +17,6 @@ func NewMemStorage() *MemStorage {
 		gauges:   make(map[string]float64),
 		counters: make(map[string]int64),
 	}
-}
-
-func (storage *MemStorage) Save() error {
-	if storage.MetricsRepository == nil {
-		return nil
-	}
-
-	return storage.MetricsRepository.Flush(storage)
 }
 
 func (storage *MemStorage) SetGauge(name string, value float64) {

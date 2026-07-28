@@ -31,6 +31,17 @@ type updateMetricsCase struct {
 	want    updateMetricsWant
 }
 
+type metricsRepositorySpy struct {
+	flushCalls int
+	snapshot   models.MetricsSnapshot
+}
+
+func (repo *metricsRepositorySpy) Flush(storage repository.MetricsSnapshotProvider) error {
+	repo.flushCalls++
+	repo.snapshot = storage.Snapshot()
+	return nil
+}
+
 func TestUpdateMetrics(t *testing.T) {
 	tests := []updateMetricsCase{
 		{
@@ -194,8 +205,7 @@ func TestUpdateMetricsSavesSynchronously(t *testing.T) {
 		FilePath: filepath.Join(t.TempDir(), "metrics.json"),
 	}
 	storage := repository.NewMemStorage()
-	storage.MetricsRepository = fileRepository
-	metricsHandler := NewMetricsHandler(storage)
+	metricsHandler := NewPersistingMetricsHandler(NewMetricsHandler(storage), fileRepository)
 
 	response := handleUpdateMetricsWithHandler(metricsHandler, updateMetricsRequest{
 		method:      http.MethodPost,
@@ -218,6 +228,31 @@ func TestUpdateMetricsSavesSynchronously(t *testing.T) {
 	}
 	if value != 2 {
 		t.Fatalf("counter PollCount = %d, want 2", value)
+	}
+}
+
+func TestUpdateMetricsJSONSavesSynchronously(t *testing.T) {
+	storage := repository.NewMemStorage()
+	metricsRepository := &metricsRepositorySpy{}
+	metricsHandler := NewPersistingMetricsHandler(NewMetricsHandler(storage), metricsRepository)
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/update",
+		strings.NewReader(`{"id":"PollCount","type":"counter","delta":2}`),
+	)
+	request.Header.Set("Content-Type", "application/json")
+	response := httptest.NewRecorder()
+	NewRouter(metricsHandler).ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+	if metricsRepository.flushCalls != 1 {
+		t.Fatalf("flush calls = %d, want 1", metricsRepository.flushCalls)
+	}
+	if value := metricsRepository.snapshot.Counters["PollCount"]; value != 2 {
+		t.Fatalf("persisted counter PollCount = %d, want 2", value)
 	}
 }
 
@@ -258,7 +293,7 @@ func handleUpdateMetrics(request updateMetricsRequest) *httptest.ResponseRecorde
 	return handleUpdateMetricsWithHandler(metricsHandler, request)
 }
 
-func handleUpdateMetricsWithHandler(metricsHandler *MetricsHandler, request updateMetricsRequest) *httptest.ResponseRecorder {
+func handleUpdateMetricsWithHandler(metricsHandler MetricsEndpoints, request updateMetricsRequest) *httptest.ResponseRecorder {
 	target := fmt.Sprintf(
 		"/update/%s/%s/%s",
 		request.metricType,

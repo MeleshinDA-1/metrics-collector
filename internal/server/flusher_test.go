@@ -15,7 +15,7 @@ type flakyMetricsRepository struct {
 	secondCall chan struct{}
 }
 
-func (repo *flakyMetricsRepository) Flush(*repository.MemStorage) error {
+func (repo *flakyMetricsRepository) Flush(repository.MetricsSnapshotProvider) error {
 	repo.calls++
 	if repo.calls == 1 {
 		return errors.New("temporary error")

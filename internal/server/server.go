@@ -13,7 +13,7 @@ import (
 )
 
 func Run(serverConfig config.ServerConfig) error {
-	ConfigureLogger()
+	ConfigureLogger(serverConfig)
 
 	storage := repository.NewMemStorage()
 	fileRepository := &repository.FileMetricsRepository{
@@ -26,12 +26,12 @@ func Run(serverConfig config.ServerConfig) error {
 		}
 	}
 
-	if serverConfig.StoreInterval == 0 {
-		storage.MetricsRepository = fileRepository
-	}
-
 	metricsHandler := handler.NewMetricsHandler(storage)
-	router := handler.NewRouter(metricsHandler)
+	var metricsEndpoints handler.MetricsEndpoints = metricsHandler
+	if serverConfig.StoreInterval == 0 {
+		metricsEndpoints = handler.NewPersistingMetricsHandler(metricsHandler, fileRepository)
+	}
+	router := handler.NewRouter(metricsEndpoints)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -48,7 +48,7 @@ func Run(serverConfig config.ServerConfig) error {
 	return http.ListenAndServe(serverConfig.Address, router)
 }
 
-func ConfigureLogger() {
+func ConfigureLogger(config config.ServerConfig) {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil)).With(
 		"service", "metrics-collector",
 		"env", "prod",
@@ -56,5 +56,5 @@ func ConfigureLogger() {
 	)
 	slog.SetDefault(logger)
 
-	logger.Info("started", "port", 8080)
+	logger.Info("started", "address", config.Address)
 }
