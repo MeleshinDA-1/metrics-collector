@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/MeleshinDA-1/metrics-collector/internal/handler"
+	"github.com/MeleshinDA-1/metrics-collector/internal/handler/health"
 	"github.com/MeleshinDA-1/metrics-collector/internal/model"
 	"github.com/MeleshinDA-1/metrics-collector/internal/repository"
 )
@@ -66,7 +67,7 @@ func TestUpdateMetricsJSONSavesSynchronously(t *testing.T) {
 	)
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
-	handler.NewRouter(metricsHandler).ServeHTTP(response, request)
+	handler.NewRouter(metricsHandler, health.NewPingHandler(nil)).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)

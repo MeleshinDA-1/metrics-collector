@@ -3,6 +3,8 @@ package config
 import "testing"
 
 func TestParseServerConfig(t *testing.T) {
+	t.Setenv("DATABASE_DSN", "")
+
 	tests := []struct {
 		name       string
 		args       []string
@@ -25,12 +27,14 @@ func TestParseServerConfig(t *testing.T) {
 				"-i", "0",
 				"-f", "metrics.json",
 				"-r=false",
+				"-d", "postgres://flag-dsn",
 			},
 			wantConfig: ServerConfig{
-				Address:         "localhost:8888",
-				StoreInterval:   0,
-				FileStoragePath: "metrics.json",
-				Restore:         false,
+				Address:                  "localhost:8888",
+				StoreInterval:            0,
+				FileStoragePath:          "metrics.json",
+				Restore:                  false,
+				PostgresConnectionString: "postgres://flag-dsn",
 			},
 		},
 		{
@@ -65,22 +69,25 @@ func TestParseServerConfigEnvironmentOverridesFlags(t *testing.T) {
 	t.Setenv("STORE_INTERVAL", "15")
 	t.Setenv("FILE_STORAGE_PATH", "")
 	t.Setenv("RESTORE", "")
+	t.Setenv("DATABASE_DSN", "postgres://environment-dsn")
 
 	config, err := ParseConfig[ServerConfig]([]string{
 		"-a", "localhost:8888",
 		"-i", "10",
 		"-f", "metrics.json",
 		"-r=false",
+		"-d", "postgres://flag-dsn",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	want := ServerConfig{
-		Address:         "localhost:8888",
-		StoreInterval:   15,
-		FileStoragePath: "metrics.json",
-		Restore:         false,
+		Address:                  "localhost:8888",
+		StoreInterval:            15,
+		FileStoragePath:          "metrics.json",
+		Restore:                  false,
+		PostgresConnectionString: "postgres://environment-dsn",
 	}
 	if config != want {
 		t.Fatalf("config = %+v, want %+v", config, want)

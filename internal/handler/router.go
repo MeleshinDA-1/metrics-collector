@@ -15,10 +15,15 @@ type MetricsEndpoints interface {
 	ValueMetricsJson(http.ResponseWriter, *http.Request)
 }
 
-func NewRouter(metricsEndpoints MetricsEndpoints) http.Handler {
+type PingEndpoints interface {
+	PingDb(http.ResponseWriter, *http.Request)
+}
+
+func NewRouter(metricsEndpoints MetricsEndpoints, pingEndpoints PingEndpoints) http.Handler {
 	router := mux.NewRouter()
 
 	registerMetricsRoutes(router, metricsEndpoints)
+	registerPingRoutes(router, pingEndpoints)
 
 	return middleware.LoggingMiddleware(middleware.CompressingMiddleware(router))
 }
@@ -33,4 +38,9 @@ func registerMetricsRoutes(r *mux.Router, metricsEndpoints MetricsEndpoints) {
 
 	r.HandleFunc("/update/{metricType}/{metricName}/{metricValue}", metricsEndpoints.UpdateMetrics).Methods(http.MethodPost)
 	r.HandleFunc("/value/{metricType}/{metricName}", metricsEndpoints.ValueMetrics).Methods(http.MethodGet)
+}
+
+func registerPingRoutes(r *mux.Router, pingEndpoints PingEndpoints) {
+	r.HandleFunc("/ping", pingEndpoints.PingDb).Methods(http.MethodGet)
+	r.HandleFunc("/ping/", pingEndpoints.PingDb).Methods(http.MethodGet)
 }
