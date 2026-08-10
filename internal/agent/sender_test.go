@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	models "github.com/MeleshinDA-1/metrics-collector/internal/model"
+	"github.com/MeleshinDA-1/metrics-collector/internal/model"
 )
 
 type capturedMetricRequest struct {
@@ -17,7 +17,7 @@ type capturedMetricRequest struct {
 	path            string
 	mediaType       string
 	contentEncoding string
-	metric          models.Metrics
+	metric          model.Metrics
 }
 
 func TestMetricsSenderSendMetric(t *testing.T) {
@@ -44,9 +44,9 @@ func TestMetricsSenderSendMetric(t *testing.T) {
 
 	sender := newMetricsSender(server.URL, time.Second)
 	metricValue := 42.5
-	metric := models.Metrics{
+	metric := model.Metrics{
 		ID:    "Alloc",
-		MType: models.Gauge,
+		MType: model.Gauge,
 		Value: &metricValue,
 	}
 
@@ -79,14 +79,14 @@ func TestMetricsSenderSendMetricReturnsErrorOnUnexpectedStatus(t *testing.T) {
 
 	sender := newMetricsSender(server.URL, time.Second)
 
-	err := sender.sendMetric(models.Metrics{})
+	err := sender.sendMetric(model.Metrics{})
 	if err == nil {
 		t.Fatal("sendMetric returned nil error, want non-nil error")
 	}
 }
 
 func TestMetricsSenderSendMetrics(t *testing.T) {
-	receivedMetrics := make([]models.Metrics, 0, 2)
+	receivedMetrics := make([]model.Metrics, 0, 2)
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		metric, err := decodeGzipMetric(request)
 		if err != nil {
@@ -115,19 +115,19 @@ func TestMetricsSenderSendMetrics(t *testing.T) {
 
 	gaugeValue := 42.5
 	counterDelta := int64(2)
-	wantMetrics := map[string]models.Metrics{
+	wantMetrics := map[string]model.Metrics{
 		"Alloc": {
 			ID:    "Alloc",
-			MType: models.Gauge,
+			MType: model.Gauge,
 			Value: &gaugeValue,
 		},
 		"PollCount": {
 			ID:    "PollCount",
-			MType: models.Counter,
+			MType: model.Counter,
 			Delta: &counterDelta,
 		},
 	}
-	gotMetrics := make(map[string]models.Metrics, len(receivedMetrics))
+	gotMetrics := make(map[string]model.Metrics, len(receivedMetrics))
 	for _, metric := range receivedMetrics {
 		gotMetrics[metric.ID] = metric
 	}
@@ -137,16 +137,16 @@ func TestMetricsSenderSendMetrics(t *testing.T) {
 	}
 }
 
-func decodeGzipMetric(request *http.Request) (models.Metrics, error) {
+func decodeGzipMetric(request *http.Request) (model.Metrics, error) {
 	reader, err := gzip.NewReader(request.Body)
 	if err != nil {
-		return models.Metrics{}, err
+		return model.Metrics{}, err
 	}
 	defer reader.Close()
 
-	var metric models.Metrics
+	var metric model.Metrics
 	if err := json.NewDecoder(reader).Decode(&metric); err != nil {
-		return models.Metrics{}, err
+		return model.Metrics{}, err
 	}
 
 	return metric, nil

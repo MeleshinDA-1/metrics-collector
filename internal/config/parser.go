@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -12,27 +11,6 @@ import (
 
 	"github.com/caarlos0/env/v11"
 )
-
-type AgentConfig struct {
-	ServerAddress  string        `env:"ADDRESS" flag:"a,default=localhost:8080" usage:"HTTP server address"`
-	ReportInterval time.Duration `env:"REPORT_INTERVAL" flag:"r,default=10s" usage:"metrics report interval in seconds"`
-	PollInterval   time.Duration `env:"POLL_INTERVAL" flag:"p,default=2s" usage:"metrics poll interval in seconds"`
-}
-
-type ServerConfig struct {
-	Address         string `env:"ADDRESS" flag:"a,default=localhost:8080" usage:"HTTP server address"`
-	StoreInterval   int    `env:"STORE_INTERVAL" flag:"i,default=300" usage:"metrics store interval in seconds"`
-	FileStoragePath string `env:"FILE_STORAGE_PATH" flag:"f,default=metricsDataDefault" usage:"metrics storage path"`
-	Restore         bool   `env:"RESTORE" flag:"r,default=true" usage:"should load metrics data from storage"`
-}
-
-func ParseAgentConfig() (AgentConfig, error) {
-	return ParseConfig[AgentConfig](os.Args[1:])
-}
-
-func ParseServerConfig() (ServerConfig, error) {
-	return ParseConfig[ServerConfig](os.Args[1:])
-}
 
 func ParseConfig[T any](args []string) (T, error) {
 	cfg, err := parseConfigFromFlags[T](args)

@@ -1,15 +1,15 @@
-package handler
+package metrics
 
 import (
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 
-	models "github.com/MeleshinDA-1/metrics-collector/internal/model"
+	"github.com/MeleshinDA-1/metrics-collector/internal/handler"
+	"github.com/MeleshinDA-1/metrics-collector/internal/model"
 	"github.com/MeleshinDA-1/metrics-collector/internal/repository"
 	"github.com/gorilla/mux"
 )
@@ -29,17 +29,6 @@ type updateMetricsCase struct {
 	name    string
 	request updateMetricsRequest
 	want    updateMetricsWant
-}
-
-type metricsRepositorySpy struct {
-	flushCalls int
-	snapshot   models.MetricsSnapshot
-}
-
-func (repo *metricsRepositorySpy) Flush(storage repository.MetricsSnapshotProvider) error {
-	repo.flushCalls++
-	repo.snapshot = storage.Snapshot()
-	return nil
 }
 
 func TestUpdateMetrics(t *testing.T) {
@@ -181,7 +170,7 @@ func TestUpdateMetricsJSONResponse(t *testing.T) {
 		)
 		request.Header.Set("Content-Type", "application/json")
 		response = httptest.NewRecorder()
-		NewRouter(metricsHandler).ServeHTTP(response, request)
+		handler.NewRouter(metricsHandler).ServeHTTP(response, request)
 	}
 
 	if response.Code != http.StatusOK {
@@ -191,68 +180,12 @@ func TestUpdateMetricsJSONResponse(t *testing.T) {
 		t.Fatalf("Content-Type = %q, want application/json", contentType)
 	}
 
-	var metric models.Metrics
+	var metric model.Metrics
 	if err := json.NewDecoder(response.Body).Decode(&metric); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
 	if metric.Delta == nil || *metric.Delta != 4 {
 		t.Fatalf("counter delta = %v, want 4", metric.Delta)
-	}
-}
-
-func TestUpdateMetricsSavesSynchronously(t *testing.T) {
-	fileRepository := &repository.FileMetricsRepository{
-		FilePath: filepath.Join(t.TempDir(), "metrics.json"),
-	}
-	storage := repository.NewMemStorage()
-	metricsHandler := NewPersistingMetricsHandler(NewMetricsHandler(storage), fileRepository)
-
-	response := handleUpdateMetricsWithHandler(metricsHandler, updateMetricsRequest{
-		method:      http.MethodPost,
-		metricType:  "counter",
-		metricName:  "PollCount",
-		metricValue: "2",
-	})
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
-	}
-
-	restoredStorage := repository.NewMemStorage()
-	if err := fileRepository.Restore(restoredStorage); err != nil {
-		t.Fatalf("restore metrics: %v", err)
-	}
-
-	value, ok := restoredStorage.GetCounter("PollCount")
-	if !ok {
-		t.Fatal("counter PollCount not found")
-	}
-	if value != 2 {
-		t.Fatalf("counter PollCount = %d, want 2", value)
-	}
-}
-
-func TestUpdateMetricsJSONSavesSynchronously(t *testing.T) {
-	storage := repository.NewMemStorage()
-	metricsRepository := &metricsRepositorySpy{}
-	metricsHandler := NewPersistingMetricsHandler(NewMetricsHandler(storage), metricsRepository)
-
-	request := httptest.NewRequest(
-		http.MethodPost,
-		"/update",
-		strings.NewReader(`{"id":"PollCount","type":"counter","delta":2}`),
-	)
-	request.Header.Set("Content-Type", "application/json")
-	response := httptest.NewRecorder()
-	NewRouter(metricsHandler).ServeHTTP(response, request)
-
-	if response.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
-	}
-	if metricsRepository.flushCalls != 1 {
-		t.Fatalf("flush calls = %d, want 1", metricsRepository.flushCalls)
-	}
-	if value := metricsRepository.snapshot.Counters["PollCount"]; value != 2 {
-		t.Fatalf("persisted counter PollCount = %d, want 2", value)
 	}
 }
 
@@ -293,7 +226,7 @@ func handleUpdateMetrics(request updateMetricsRequest) *httptest.ResponseRecorde
 	return handleUpdateMetricsWithHandler(metricsHandler, request)
 }
 
-func handleUpdateMetricsWithHandler(metricsHandler MetricsEndpoints, request updateMetricsRequest) *httptest.ResponseRecorder {
+func handleUpdateMetricsWithHandler(metricsHandler handler.MetricsEndpoints, request updateMetricsRequest) *httptest.ResponseRecorder {
 	target := fmt.Sprintf(
 		"/update/%s/%s/%s",
 		request.metricType,
@@ -302,7 +235,7 @@ func handleUpdateMetricsWithHandler(metricsHandler MetricsEndpoints, request upd
 	)
 	req := httptest.NewRequest(request.method, target, nil)
 	response := httptest.NewRecorder()
-	NewRouter(metricsHandler).ServeHTTP(response, req)
+	handler.NewRouter(metricsHandler).ServeHTTP(response, req)
 
 	return response
 }

@@ -3,7 +3,7 @@ package repository
 import (
 	"sync"
 
-	models "github.com/MeleshinDA-1/metrics-collector/internal/model"
+	"github.com/MeleshinDA-1/metrics-collector/internal/model"
 )
 
 type MemStorage struct {
@@ -49,7 +49,7 @@ func (storage *MemStorage) GetCounter(name string) (int64, bool) {
 	return value, ok
 }
 
-func (storage *MemStorage) Snapshot() models.MetricsSnapshot {
+func (storage *MemStorage) Snapshot() model.MetricsSnapshot {
 	storage.mutex.Lock()
 	defer storage.mutex.Unlock()
 
@@ -63,7 +63,7 @@ func (storage *MemStorage) Snapshot() models.MetricsSnapshot {
 		counters[name] = value
 	}
 
-	return models.MetricsSnapshot{
+	return model.MetricsSnapshot{
 		Gauges:   gauges,
 		Counters: counters,
 	}

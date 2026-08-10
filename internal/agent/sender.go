@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	models "github.com/MeleshinDA-1/metrics-collector/internal/model"
+	"github.com/MeleshinDA-1/metrics-collector/internal/model"
 )
 
 type metricsSender struct {
@@ -33,7 +33,7 @@ func (sender *metricsSender) run(store *metricsStore) {
 
 func (sender *metricsSender) sendMetrics(store *metricsStore) {
 	snapshot := store.snapshot()
-	metric := models.Metrics{MType: models.Gauge}
+	metric := model.Metrics{MType: model.Gauge}
 	for metricName, metricValue := range snapshot.gauges {
 		metric.ID = metricName
 		metric.Value = &metricValue
@@ -47,7 +47,7 @@ func (sender *metricsSender) sendMetrics(store *metricsStore) {
 }
 
 func (sender *metricsSender) sendCounters(store *metricsStore, counters map[string]int64) {
-	metric := models.Metrics{MType: models.Counter}
+	metric := model.Metrics{MType: model.Counter}
 	for metricName, metricValue := range counters {
 		metric.ID = metricName
 		metric.Delta = &metricValue
@@ -61,7 +61,7 @@ func (sender *metricsSender) sendCounters(store *metricsStore, counters map[stri
 	}
 }
 
-func (sender *metricsSender) sendMetric(metric models.Metrics) error {
+func (sender *metricsSender) sendMetric(metric model.Metrics) error {
 	body, err := buildRequestBody(
 		withGzipCompression(encodeJSON(metric)),
 	)

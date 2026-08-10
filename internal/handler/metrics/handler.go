@@ -1,13 +1,13 @@
-package handler
+package metrics
 
 import (
 	"net/http"
 
-	models "github.com/MeleshinDA-1/metrics-collector/internal/model"
+	"github.com/MeleshinDA-1/metrics-collector/internal/model"
 	"github.com/gorilla/mux"
 )
 
-type MetricsSnapshot = models.MetricsSnapshot
+type MetricsSnapshot = model.MetricsSnapshot
 
 type MetricsStorage interface {
 	SetGauge(name string, value float64)
