@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 
 	"github.com/MeleshinDA-1/metrics-collector/internal/config"
 	"github.com/MeleshinDA-1/metrics-collector/internal/handler"
+	"github.com/MeleshinDA-1/metrics-collector/internal/handler/metrics"
 	"github.com/MeleshinDA-1/metrics-collector/internal/repository"
 )
 
@@ -26,11 +26,12 @@ func Run(serverConfig config.ServerConfig) error {
 		}
 	}
 
-	metricsHandler := handler.NewMetricsHandler(storage)
+	metricsHandler := metrics.NewMetricsHandler(storage)
 	var metricsEndpoints handler.MetricsEndpoints = metricsHandler
 	if serverConfig.StoreInterval == 0 {
-		metricsEndpoints = handler.NewPersistingMetricsHandler(metricsHandler, fileRepository)
+		metricsEndpoints = metrics.NewPersistingMetricsHandler(metricsHandler, fileRepository)
 	}
+
 	router := handler.NewRouter(metricsEndpoints)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -46,15 +47,4 @@ func Run(serverConfig config.ServerConfig) error {
 	}
 
 	return http.ListenAndServe(serverConfig.Address, router)
-}
-
-func ConfigureLogger(config config.ServerConfig) {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil)).With(
-		"service", "metrics-collector",
-		"env", "prod",
-		"region", "ru-central1",
-	)
-	slog.SetDefault(logger)
-
-	logger.Info("started", "address", config.Address)
 }

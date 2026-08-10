@@ -1,4 +1,4 @@
-package handler
+package metrics
 
 import (
 	"encoding/json"
@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
-	models "github.com/MeleshinDA-1/metrics-collector/internal/model"
+	"github.com/MeleshinDA-1/metrics-collector/internal/model"
 )
 
 func (handler *MetricsHandler) UpdateMetrics(res http.ResponseWriter, req *http.Request) {
@@ -53,16 +53,16 @@ func (handler *MetricsHandler) UpdateMetricsJson(res http.ResponseWriter, req *h
 	writeMetricsJSON(res, requestMetric)
 }
 
-func (handler *MetricsHandler) updateMetricsJSON(req *http.Request) (models.Metrics, error) {
-	var requestMetric models.Metrics
+func (handler *MetricsHandler) updateMetricsJSON(req *http.Request) (model.Metrics, error) {
+	var requestMetric model.Metrics
 	if err := json.NewDecoder(req.Body).Decode(&requestMetric); err != nil {
-		return models.Metrics{}, err
+		return model.Metrics{}, err
 	}
 
 	switch requestMetric.MType {
 	case "counter":
 		if requestMetric.Delta == nil {
-			return models.Metrics{}, fmt.Errorf("delta is required")
+			return model.Metrics{}, fmt.Errorf("delta is required")
 		}
 		handler.storage.AddCounter(requestMetric.ID, *requestMetric.Delta)
 		value, _ := handler.storage.GetCounter(requestMetric.ID)
@@ -70,18 +70,18 @@ func (handler *MetricsHandler) updateMetricsJSON(req *http.Request) (models.Metr
 		requestMetric.Value = nil
 	case "gauge":
 		if requestMetric.Value == nil {
-			return models.Metrics{}, fmt.Errorf("value is required")
+			return model.Metrics{}, fmt.Errorf("value is required")
 		}
 		handler.storage.SetGauge(requestMetric.ID, *requestMetric.Value)
 		requestMetric.Delta = nil
 	default:
-		return models.Metrics{}, fmt.Errorf("Unknown metric type \"%s\"", requestMetric.MType)
+		return model.Metrics{}, fmt.Errorf("Unknown metric type \"%s\"", requestMetric.MType)
 	}
 
 	return requestMetric, nil
 }
 
-func writeMetricsJSON(res http.ResponseWriter, metric models.Metrics) {
+func writeMetricsJSON(res http.ResponseWriter, metric model.Metrics) {
 	res.Header().Set("Content-Type", "application/json")
 	res.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(res).Encode(metric); err != nil {

@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 
+	"github.com/MeleshinDA-1/metrics-collector/internal/handler/middleware"
 	"github.com/gorilla/mux"
 )
 
@@ -17,15 +18,19 @@ type MetricsEndpoints interface {
 func NewRouter(metricsEndpoints MetricsEndpoints) http.Handler {
 	router := mux.NewRouter()
 
-	router.HandleFunc("/", metricsEndpoints.ListMetrics).Methods(http.MethodGet) // localhost:8080/
+	registerMetricsRoutes(router, metricsEndpoints)
 
-	router.HandleFunc("/update", metricsEndpoints.UpdateMetricsJson).Methods(http.MethodPost)
-	router.HandleFunc("/update/", metricsEndpoints.UpdateMetricsJson).Methods(http.MethodPost)
-	router.HandleFunc("/value", metricsEndpoints.ValueMetricsJson).Methods(http.MethodPost)
-	router.HandleFunc("/value/", metricsEndpoints.ValueMetricsJson).Methods(http.MethodPost)
+	return middleware.LoggingMiddleware(middleware.CompressingMiddleware(router))
+}
 
-	router.HandleFunc("/update/{metricType}/{metricName}/{metricValue}", metricsEndpoints.UpdateMetrics).Methods(http.MethodPost)
-	router.HandleFunc("/value/{metricType}/{metricName}", metricsEndpoints.ValueMetrics).Methods(http.MethodGet)
+func registerMetricsRoutes(r *mux.Router, metricsEndpoints MetricsEndpoints) {
+	r.HandleFunc("/", metricsEndpoints.ListMetrics).Methods(http.MethodGet)
 
-	return LoggingMiddleware(CompressingMiddleware(router))
+	r.HandleFunc("/update", metricsEndpoints.UpdateMetricsJson).Methods(http.MethodPost)
+	r.HandleFunc("/update/", metricsEndpoints.UpdateMetricsJson).Methods(http.MethodPost)
+	r.HandleFunc("/value", metricsEndpoints.ValueMetricsJson).Methods(http.MethodPost)
+	r.HandleFunc("/value/", metricsEndpoints.ValueMetricsJson).Methods(http.MethodPost)
+
+	r.HandleFunc("/update/{metricType}/{metricName}/{metricValue}", metricsEndpoints.UpdateMetrics).Methods(http.MethodPost)
+	r.HandleFunc("/value/{metricType}/{metricName}", metricsEndpoints.ValueMetrics).Methods(http.MethodGet)
 }

@@ -8,20 +8,12 @@ import (
 	"os"
 	"sync"
 
-	models "github.com/MeleshinDA-1/metrics-collector/internal/model"
+	"github.com/MeleshinDA-1/metrics-collector/internal/model"
 )
 
 type FileMetricsRepository struct {
 	FilePath string
 	mutex    sync.Mutex
-}
-
-type MetricsSnapshotProvider interface {
-	Snapshot() models.MetricsSnapshot
-}
-
-type MetricsRepository interface {
-	Flush(MetricsSnapshotProvider) error
 }
 
 func (repo *FileMetricsRepository) Flush(storage MetricsSnapshotProvider) error {
@@ -35,22 +27,22 @@ func (repo *FileMetricsRepository) Flush(storage MetricsSnapshotProvider) error 
 	defer file.Close()
 
 	snapshot := storage.Snapshot()
-	metrics := make([]models.Metrics, 0, len(snapshot.Gauges)+len(snapshot.Counters))
+	metrics := make([]model.Metrics, 0, len(snapshot.Gauges)+len(snapshot.Counters))
 
 	for name, value := range snapshot.Gauges {
 		metricValue := value
-		metrics = append(metrics, models.Metrics{
+		metrics = append(metrics, model.Metrics{
 			ID:    name,
-			MType: models.Gauge,
+			MType: model.Gauge,
 			Value: &metricValue,
 		})
 	}
 
 	for name, delta := range snapshot.Counters {
 		metricDelta := delta
-		metrics = append(metrics, models.Metrics{
+		metrics = append(metrics, model.Metrics{
 			ID:    name,
-			MType: models.Counter,
+			MType: model.Counter,
 			Delta: &metricDelta,
 		})
 	}
@@ -73,7 +65,7 @@ func (repo *FileMetricsRepository) Restore(memStorage *MemStorage) error {
 	}
 	defer file.Close()
 
-	var metrics []models.Metrics
+	var metrics []model.Metrics
 	if err := json.NewDecoder(file).Decode(&metrics); errors.Is(err, io.EOF) {
 		return nil
 	} else if err != nil {
@@ -82,12 +74,12 @@ func (repo *FileMetricsRepository) Restore(memStorage *MemStorage) error {
 
 	for _, metric := range metrics {
 		switch metric.MType {
-		case models.Gauge:
+		case model.Gauge:
 			if metric.Value == nil {
 				return fmt.Errorf("gauge %q has no value", metric.ID)
 			}
 			memStorage.SetGauge(metric.ID, *metric.Value)
-		case models.Counter:
+		case model.Counter:
 			if metric.Delta == nil {
 				return fmt.Errorf("counter %q has no delta", metric.ID)
 			}

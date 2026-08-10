@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	models "github.com/MeleshinDA-1/metrics-collector/internal/model"
+	"github.com/MeleshinDA-1/metrics-collector/internal/model"
 )
 
 func TestFileMetricsRepositoryFlushAndRestore(t *testing.T) {
@@ -27,7 +27,7 @@ func TestFileMetricsRepositoryFlushAndRestore(t *testing.T) {
 		t.Fatalf("read metrics file: %v", err)
 	}
 
-	var metrics []models.Metrics
+	var metrics []model.Metrics
 	if err := json.Unmarshal(data, &metrics); err != nil {
 		t.Fatalf("decode metrics: %v", err)
 	}

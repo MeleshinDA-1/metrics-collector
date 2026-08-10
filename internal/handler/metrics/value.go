@@ -1,4 +1,4 @@
-package handler
+package metrics
 
 import (
 	"encoding/json"
@@ -6,17 +6,17 @@ import (
 	"net/http"
 	"strconv"
 
-	models "github.com/MeleshinDA-1/metrics-collector/internal/model"
+	"github.com/MeleshinDA-1/metrics-collector/internal/model"
 )
 
 func (handler *MetricsHandler) ValueMetricsJson(res http.ResponseWriter, req *http.Request) {
-	var requestMetric models.Metrics
+	var requestMetric model.Metrics
 	if err := json.NewDecoder(req.Body).Decode(&requestMetric); err != nil {
 		http.Error(res, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	var responseMetric = models.Metrics{
+	var responseMetric = model.Metrics{
 		ID:    requestMetric.ID,
 		MType: requestMetric.MType,
 		Delta: nil,
