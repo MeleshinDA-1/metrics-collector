@@ -51,3 +51,17 @@ func (handler *PersistingMetricsHandler) UpdateMetricsJson(res http.ResponseWrit
 
 	writeMetricsJSON(res, requestMetric)
 }
+
+func (handler *PersistingMetricsHandler) UpdateBatchMetricsJson(res http.ResponseWriter, req *http.Request) {
+	requestMetrics, status, err := handler.updateBatchMetricsJSON(req)
+	if err != nil {
+		writeError(res, status, err)
+		return
+	}
+	if err := handler.metricsRepository.Flush(handler.storage); err != nil {
+		writeError(res, http.StatusInternalServerError, err)
+		return
+	}
+
+	writeMetricsBatchJSON(res, requestMetrics)
+}

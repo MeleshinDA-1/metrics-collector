@@ -28,11 +28,31 @@ func (storage *MemStorage) SetGauge(name string, value float64) error {
 	return nil
 }
 
-func (storage *MemStorage) AddCounter(name string, delta int64) error {
+func (storage *MemStorage) AddCounter(name string, delta int64) (int64, error) {
 	storage.mutex.Lock()
 	defer storage.mutex.Unlock()
 
 	storage.counters[name] += delta
+
+	return storage.counters[name], nil
+}
+
+func (storage *MemStorage) UpdateBatch(metrics []model.Metrics) error {
+	if err := validateBatch(metrics); err != nil {
+		return err
+	}
+
+	storage.mutex.Lock()
+	defer storage.mutex.Unlock()
+
+	for _, metric := range metrics {
+		switch metric.MType {
+		case model.Gauge:
+			storage.gauges[metric.ID] = *metric.Value
+		case model.Counter:
+			storage.counters[metric.ID] += *metric.Delta
+		}
+	}
 
 	return nil
 }

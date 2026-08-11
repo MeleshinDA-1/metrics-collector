@@ -29,7 +29,7 @@ func (handler *MetricsHandler) updateMetrics(req *http.Request) (int, error) {
 		if err != nil {
 			return http.StatusBadRequest, err
 		}
-		if err := handler.storage.AddCounter(metricName, value); err != nil {
+		if _, err := handler.storage.AddCounter(metricName, value); err != nil {
 			return http.StatusInternalServerError, err
 		}
 	case "gauge":
@@ -68,10 +68,7 @@ func (handler *MetricsHandler) updateMetricsJSON(req *http.Request) (model.Metri
 		if requestMetric.Delta == nil {
 			return model.Metrics{}, http.StatusBadRequest, fmt.Errorf("delta is required")
 		}
-		if err := handler.storage.AddCounter(requestMetric.ID, *requestMetric.Delta); err != nil {
-			return model.Metrics{}, http.StatusInternalServerError, err
-		}
-		value, _, err := handler.storage.GetCounter(requestMetric.ID)
+		value, err := handler.storage.AddCounter(requestMetric.ID, *requestMetric.Delta)
 		if err != nil {
 			return model.Metrics{}, http.StatusInternalServerError, err
 		}
@@ -92,10 +89,59 @@ func (handler *MetricsHandler) updateMetricsJSON(req *http.Request) (model.Metri
 	return requestMetric, http.StatusOK, nil
 }
 
+func (handler *MetricsHandler) UpdateBatchMetricsJson(res http.ResponseWriter, req *http.Request) {
+	requestMetrics, status, err := handler.updateBatchMetricsJSON(req)
+	if err != nil {
+		writeError(res, status, err)
+		return
+	}
+
+	writeMetricsBatchJSON(res, requestMetrics)
+}
+
+func (handler *MetricsHandler) updateBatchMetricsJSON(req *http.Request) ([]model.Metrics, int, error) {
+	var requestMetrics []model.Metrics
+	if err := json.NewDecoder(req.Body).Decode(&requestMetrics); err != nil {
+		return nil, http.StatusBadRequest, err
+	}
+	if len(requestMetrics) == 0 {
+		return nil, http.StatusBadRequest, fmt.Errorf("batch is empty")
+	}
+
+	for _, metric := range requestMetrics {
+		switch metric.MType {
+		case model.Counter:
+			if metric.Delta == nil {
+				return nil, http.StatusBadRequest, fmt.Errorf("delta is required for %q", metric.ID)
+			}
+		case model.Gauge:
+			if metric.Value == nil {
+				return nil, http.StatusBadRequest, fmt.Errorf("value is required for %q", metric.ID)
+			}
+		default:
+			return nil, http.StatusBadRequest, fmt.Errorf("Unknown metric type \"%s\"", metric.MType)
+		}
+	}
+
+	if err := handler.storage.UpdateBatch(requestMetrics); err != nil {
+		return nil, http.StatusInternalServerError, err
+	}
+
+	return requestMetrics, http.StatusOK, nil
+}
+
 func writeMetricsJSON(res http.ResponseWriter, metric model.Metrics) {
 	res.Header().Set("Content-Type", "application/json")
 	res.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(res).Encode(metric); err != nil {
+		return
+	}
+}
+
+func writeMetricsBatchJSON(res http.ResponseWriter, metrics []model.Metrics) {
+	res.Header().Set("Content-Type", "application/json")
+	res.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(res).Encode(metrics); err != nil {
 		return
 	}
 }

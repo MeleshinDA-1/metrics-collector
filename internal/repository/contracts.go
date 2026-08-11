@@ -8,7 +8,7 @@ type MetricsSnapshotProvider interface {
 
 type MetricsWriter interface {
 	SetGauge(name string, value float64) error
-	AddCounter(name string, delta int64) error
+	AddCounter(name string, delta int64) (int64, error)
 }
 
 type MetricsRepository interface {

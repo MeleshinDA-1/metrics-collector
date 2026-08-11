@@ -11,7 +11,8 @@ type MetricsSnapshot = model.MetricsSnapshot
 
 type MetricsStorage interface {
 	SetGauge(name string, value float64) error
-	AddCounter(name string, delta int64) error
+	AddCounter(name string, delta int64) (int64, error)
+	UpdateBatch(metrics []model.Metrics) error
 	GetGauge(name string) (float64, bool, error)
 	GetCounter(name string) (int64, bool, error)
 	Snapshot() (MetricsSnapshot, error)

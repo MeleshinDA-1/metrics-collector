@@ -14,8 +14,8 @@ const (
 	gzipEncoding   = "gzip"
 )
 
-func (sender *metricsSender) postUpdate(body io.Reader) error {
-	req, err := http.NewRequest(http.MethodPost, sender.updateURL, body)
+func (sender *metricsSender) post(url string, body io.Reader) error {
+	req, err := http.NewRequest(http.MethodPost, url, body)
 	if err != nil {
 		return err
 	}

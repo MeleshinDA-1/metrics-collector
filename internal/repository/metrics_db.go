@@ -33,17 +33,68 @@ func (storage *DbMetricStorage) SetGauge(name string, value float64) error {
 	return nil
 }
 
-func (storage *DbMetricStorage) AddCounter(name string, delta int64) error {
-	_, err := storage.pool.Exec(context.TODO(),
+func (storage *DbMetricStorage) AddCounter(name string, delta int64) (int64, error) {
+	var value int64
+
+	err := storage.pool.QueryRow(context.TODO(),
 		`INSERT INTO counters (metric_name, value) VALUES ($1, $2)
 		 ON CONFLICT (metric_name) DO UPDATE
-		 SET value = counters.value + EXCLUDED.value, updated_at_utc = now()`,
-		name, delta)
+		 SET value = counters.value + EXCLUDED.value, updated_at_utc = now()
+		 RETURNING value`,
+		name, delta).Scan(&value)
 	if err != nil {
-		return fmt.Errorf("add counter %q: %w", name, err)
+		return 0, fmt.Errorf("add counter %q: %w", name, err)
 	}
 
-	return nil
+	return value, nil
+}
+
+func (storage *DbMetricStorage) UpdateBatch(metrics []model.Metrics) error {
+	if err := validateBatch(metrics); err != nil {
+		return err
+	}
+	if len(metrics) == 0 {
+		return nil
+	}
+
+	ctx := context.TODO()
+
+	batch := &pgx.Batch{}
+	for _, metric := range metrics {
+		switch metric.MType {
+		case model.Gauge:
+			batch.Queue(
+				`INSERT INTO gauges (metric_name, value) VALUES ($1, $2)
+				 ON CONFLICT (metric_name) DO UPDATE
+				 SET value = EXCLUDED.value, updated_at_utc = now()`,
+				metric.ID, *metric.Value)
+		case model.Counter:
+			batch.Queue(
+				`INSERT INTO counters (metric_name, value) VALUES ($1, $2)
+				 ON CONFLICT (metric_name) DO UPDATE
+				 SET value = counters.value + EXCLUDED.value, updated_at_utc = now()`,
+				metric.ID, *metric.Delta)
+		}
+	}
+
+	tx, err := storage.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	results := tx.SendBatch(ctx, batch)
+	for range metrics {
+		if _, err := results.Exec(); err != nil {
+			_ = results.Close()
+			return fmt.Errorf("update batch: %w", err)
+		}
+	}
+	if err := results.Close(); err != nil {
+		return fmt.Errorf("close batch: %w", err)
+	}
+
+	return tx.Commit(ctx)
 }
 
 func (storage *DbMetricStorage) GetGauge(name string) (float64, bool, error) {

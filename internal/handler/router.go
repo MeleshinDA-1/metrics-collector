@@ -11,6 +11,7 @@ type MetricsEndpoints interface {
 	ListMetrics(http.ResponseWriter, *http.Request)
 	UpdateMetrics(http.ResponseWriter, *http.Request)
 	UpdateMetricsJson(http.ResponseWriter, *http.Request)
+	UpdateBatchMetricsJson(http.ResponseWriter, *http.Request)
 	ValueMetrics(http.ResponseWriter, *http.Request)
 	ValueMetricsJson(http.ResponseWriter, *http.Request)
 }
@@ -33,6 +34,7 @@ func registerMetricsRoutes(r *mux.Router, metricsEndpoints MetricsEndpoints) {
 
 	r.HandleFunc("/update", metricsEndpoints.UpdateMetricsJson).Methods(http.MethodPost)
 	r.HandleFunc("/update/", metricsEndpoints.UpdateMetricsJson).Methods(http.MethodPost)
+	r.HandleFunc("/updates/", metricsEndpoints.UpdateBatchMetricsJson).Methods(http.MethodPost)
 	r.HandleFunc("/value", metricsEndpoints.ValueMetricsJson).Methods(http.MethodPost)
 	r.HandleFunc("/value/", metricsEndpoints.ValueMetricsJson).Methods(http.MethodPost)
 

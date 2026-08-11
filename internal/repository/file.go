@@ -89,7 +89,7 @@ func (repo *FileMetricsRepository) Restore(storage MetricsWriter) error {
 			if metric.Delta == nil {
 				return fmt.Errorf("counter %q has no delta", metric.ID)
 			}
-			if err := storage.AddCounter(metric.ID, *metric.Delta); err != nil {
+			if _, err := storage.AddCounter(metric.ID, *metric.Delta); err != nil {
 				return err
 			}
 		default:
