@@ -76,7 +76,10 @@ func TestFileMetricsRepositoryRestoreEmptyStorage(t *testing.T) {
 func assertGauge(t *testing.T, storage *MemStorage, name string, want float64) {
 	t.Helper()
 
-	value, ok := storage.GetGauge(name)
+	value, ok, err := storage.GetGauge(name)
+	if err != nil {
+		t.Fatalf("get gauge %q: %v", name, err)
+	}
 	if !ok {
 		t.Fatalf("gauge %q not found", name)
 	}
@@ -88,7 +91,10 @@ func assertGauge(t *testing.T, storage *MemStorage, name string, want float64) {
 func assertCounter(t *testing.T, storage *MemStorage, name string, want int64) {
 	t.Helper()
 
-	value, ok := storage.GetCounter(name)
+	value, ok, err := storage.GetCounter(name)
+	if err != nil {
+		t.Fatalf("get counter %q: %v", name, err)
+	}
 	if !ok {
 		t.Fatalf("counter %q not found", name)
 	}

@@ -10,15 +10,15 @@ import (
 )
 
 func (handler *MetricsHandler) UpdateMetrics(res http.ResponseWriter, req *http.Request) {
-	if err := handler.updateMetrics(req); err != nil {
-		http.Error(res, err.Error(), http.StatusBadRequest)
+	if status, err := handler.updateMetrics(req); err != nil {
+		writeError(res, status, err)
 		return
 	}
 
 	res.WriteHeader(http.StatusOK)
 }
 
-func (handler *MetricsHandler) updateMetrics(req *http.Request) error {
+func (handler *MetricsHandler) updateMetrics(req *http.Request) (int, error) {
 	metricType := pathValue(req, "metricType")
 	metricName := pathValue(req, "metricName")
 	metricValue := pathValue(req, "metricValue")
@@ -27,58 +27,69 @@ func (handler *MetricsHandler) updateMetrics(req *http.Request) error {
 	case "counter":
 		value, err := strconv.ParseInt(metricValue, 10, 64)
 		if err != nil {
-			return err
+			return http.StatusBadRequest, err
 		}
-		handler.storage.AddCounter(metricName, value)
+		if err := handler.storage.AddCounter(metricName, value); err != nil {
+			return http.StatusInternalServerError, err
+		}
 	case "gauge":
 		value, err := strconv.ParseFloat(metricValue, 64)
 		if err != nil {
-			return err
+			return http.StatusBadRequest, err
 		}
-		handler.storage.SetGauge(metricName, value)
+		if err := handler.storage.SetGauge(metricName, value); err != nil {
+			return http.StatusInternalServerError, err
+		}
 	default:
-		return fmt.Errorf("Unknown metric type \"%s\"", metricType)
+		return http.StatusBadRequest, fmt.Errorf("Unknown metric type \"%s\"", metricType)
 	}
 
-	return nil
+	return http.StatusOK, nil
 }
 
 func (handler *MetricsHandler) UpdateMetricsJson(res http.ResponseWriter, req *http.Request) {
-	requestMetric, err := handler.updateMetricsJSON(req)
+	requestMetric, status, err := handler.updateMetricsJSON(req)
 	if err != nil {
-		http.Error(res, err.Error(), http.StatusBadRequest)
+		writeError(res, status, err)
 		return
 	}
 
 	writeMetricsJSON(res, requestMetric)
 }
 
-func (handler *MetricsHandler) updateMetricsJSON(req *http.Request) (model.Metrics, error) {
+func (handler *MetricsHandler) updateMetricsJSON(req *http.Request) (model.Metrics, int, error) {
 	var requestMetric model.Metrics
 	if err := json.NewDecoder(req.Body).Decode(&requestMetric); err != nil {
-		return model.Metrics{}, err
+		return model.Metrics{}, http.StatusBadRequest, err
 	}
 
 	switch requestMetric.MType {
 	case "counter":
 		if requestMetric.Delta == nil {
-			return model.Metrics{}, fmt.Errorf("delta is required")
+			return model.Metrics{}, http.StatusBadRequest, fmt.Errorf("delta is required")
 		}
-		handler.storage.AddCounter(requestMetric.ID, *requestMetric.Delta)
-		value, _ := handler.storage.GetCounter(requestMetric.ID)
+		if err := handler.storage.AddCounter(requestMetric.ID, *requestMetric.Delta); err != nil {
+			return model.Metrics{}, http.StatusInternalServerError, err
+		}
+		value, _, err := handler.storage.GetCounter(requestMetric.ID)
+		if err != nil {
+			return model.Metrics{}, http.StatusInternalServerError, err
+		}
 		requestMetric.Delta = &value
 		requestMetric.Value = nil
 	case "gauge":
 		if requestMetric.Value == nil {
-			return model.Metrics{}, fmt.Errorf("value is required")
+			return model.Metrics{}, http.StatusBadRequest, fmt.Errorf("value is required")
 		}
-		handler.storage.SetGauge(requestMetric.ID, *requestMetric.Value)
+		if err := handler.storage.SetGauge(requestMetric.ID, *requestMetric.Value); err != nil {
+			return model.Metrics{}, http.StatusInternalServerError, err
+		}
 		requestMetric.Delta = nil
 	default:
-		return model.Metrics{}, fmt.Errorf("Unknown metric type \"%s\"", requestMetric.MType)
+		return model.Metrics{}, http.StatusBadRequest, fmt.Errorf("Unknown metric type \"%s\"", requestMetric.MType)
 	}
 
-	return requestMetric, nil
+	return requestMetric, http.StatusOK, nil
 }
 
 func writeMetricsJSON(res http.ResponseWriter, metric model.Metrics) {

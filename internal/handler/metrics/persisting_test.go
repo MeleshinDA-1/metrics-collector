@@ -20,7 +20,13 @@ type metricsRepositorySpy struct {
 
 func (repo *metricsRepositorySpy) Flush(storage repository.MetricsSnapshotProvider) error {
 	repo.flushCalls++
-	repo.snapshot = storage.Snapshot()
+
+	snapshot, err := storage.Snapshot()
+	if err != nil {
+		return err
+	}
+	repo.snapshot = snapshot
+
 	return nil
 }
 
@@ -46,7 +52,10 @@ func TestUpdateMetricsSavesSynchronously(t *testing.T) {
 		t.Fatalf("restore metrics: %v", err)
 	}
 
-	value, ok := restoredStorage.GetCounter("PollCount")
+	value, ok, err := restoredStorage.GetCounter("PollCount")
+	if err != nil {
+		t.Fatalf("get counter: %v", err)
+	}
 	if !ok {
 		t.Fatal("counter PollCount not found")
 	}

@@ -19,37 +19,41 @@ func NewMemStorage() *MemStorage {
 	}
 }
 
-func (storage *MemStorage) SetGauge(name string, value float64) {
+func (storage *MemStorage) SetGauge(name string, value float64) error {
 	storage.mutex.Lock()
 	defer storage.mutex.Unlock()
 
 	storage.gauges[name] = value
+
+	return nil
 }
 
-func (storage *MemStorage) AddCounter(name string, delta int64) {
+func (storage *MemStorage) AddCounter(name string, delta int64) error {
 	storage.mutex.Lock()
 	defer storage.mutex.Unlock()
 
 	storage.counters[name] += delta
+
+	return nil
 }
 
-func (storage *MemStorage) GetGauge(name string) (float64, bool) {
+func (storage *MemStorage) GetGauge(name string) (float64, bool, error) {
 	storage.mutex.Lock()
 	defer storage.mutex.Unlock()
 
 	value, ok := storage.gauges[name]
-	return value, ok
+	return value, ok, nil
 }
 
-func (storage *MemStorage) GetCounter(name string) (int64, bool) {
+func (storage *MemStorage) GetCounter(name string) (int64, bool, error) {
 	storage.mutex.Lock()
 	defer storage.mutex.Unlock()
 
 	value, ok := storage.counters[name]
-	return value, ok
+	return value, ok, nil
 }
 
-func (storage *MemStorage) Snapshot() model.MetricsSnapshot {
+func (storage *MemStorage) Snapshot() (model.MetricsSnapshot, error) {
 	storage.mutex.Lock()
 	defer storage.mutex.Unlock()
 
@@ -66,5 +70,5 @@ func (storage *MemStorage) Snapshot() model.MetricsSnapshot {
 	return model.MetricsSnapshot{
 		Gauges:   gauges,
 		Counters: counters,
-	}
+	}, nil
 }

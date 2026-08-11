@@ -26,12 +26,12 @@ func NewPersistingMetricsHandler(
 }
 
 func (handler *PersistingMetricsHandler) UpdateMetrics(res http.ResponseWriter, req *http.Request) {
-	if err := handler.updateMetrics(req); err != nil {
-		http.Error(res, err.Error(), http.StatusBadRequest)
+	if status, err := handler.updateMetrics(req); err != nil {
+		writeError(res, status, err)
 		return
 	}
 	if err := handler.metricsRepository.Flush(handler.storage); err != nil {
-		http.Error(res, err.Error(), http.StatusInternalServerError)
+		writeError(res, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -39,13 +39,13 @@ func (handler *PersistingMetricsHandler) UpdateMetrics(res http.ResponseWriter, 
 }
 
 func (handler *PersistingMetricsHandler) UpdateMetricsJson(res http.ResponseWriter, req *http.Request) {
-	requestMetric, err := handler.updateMetricsJSON(req)
+	requestMetric, status, err := handler.updateMetricsJSON(req)
 	if err != nil {
-		http.Error(res, err.Error(), http.StatusBadRequest)
+		writeError(res, status, err)
 		return
 	}
 	if err := handler.metricsRepository.Flush(handler.storage); err != nil {
-		http.Error(res, err.Error(), http.StatusInternalServerError)
+		writeError(res, http.StatusInternalServerError, err)
 		return
 	}
 
