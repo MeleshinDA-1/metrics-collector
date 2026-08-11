@@ -1,11 +1,14 @@
 package agent
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/MeleshinDA-1/metrics-collector/internal/retry"
 )
 
 const (
@@ -14,8 +17,31 @@ const (
 	gzipEncoding   = "gzip"
 )
 
-func (sender *metricsSender) post(url string, body io.Reader) error {
-	req, err := http.NewRequest(http.MethodPost, url, body)
+type transportError struct {
+	Err error
+}
+
+func (e *transportError) Error() string {
+	return e.Err.Error()
+}
+
+func (e *transportError) Unwrap() error {
+	return e.Err
+}
+
+func isRetriableSendError(err error) bool {
+	var transportErr *transportError
+	return errors.As(err, &transportErr)
+}
+
+func (sender *metricsSender) post(url string, body []byte) error {
+	return retry.Do(func() error {
+		return sender.doPost(url, body)
+	}, isRetriableSendError)
+}
+
+func (sender *metricsSender) doPost(url string, body []byte) error {
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -25,7 +51,7 @@ func (sender *metricsSender) post(url string, body io.Reader) error {
 
 	resp, err := sender.httpClient.Do(req)
 	if err != nil {
-		return err
+		return &transportError{Err: err}
 	}
 	defer resp.Body.Close()
 
