@@ -1,26 +1,34 @@
 package agent
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/MeleshinDA-1/metrics-collector/internal/model"
+	"github.com/MeleshinDA-1/metrics-collector/internal/retry"
 )
 
 type metricsSender struct {
 	httpClient     *http.Client
 	updatesURL     string
 	reportInterval time.Duration
+	retryPolicy    retry.Policy
 }
 
-func newMetricsSender(serverAddress string, reportInterval time.Duration) *metricsSender {
+func newMetricsSender(
+	serverAddress string,
+	reportInterval time.Duration,
+	retryPolicy retry.Policy,
+) *metricsSender {
 	return &metricsSender{
 		httpClient: &http.Client{
 			Timeout: requestTimeout,
 		},
 		updatesURL:     normalizeServerAddress(serverAddress) + "/updates/",
 		reportInterval: reportInterval,
+		retryPolicy:    retryPolicy,
 	}
 }
 
@@ -56,7 +64,7 @@ func (sender *metricsSender) sendMetrics(store *metricsStore) {
 		return
 	}
 
-	if err := sender.sendBatch(metrics); err != nil {
+	if err := sender.sendBatch(context.Background(), metrics); err != nil {
 		slog.Error("failed to send metrics batch", "count", len(metrics), "err", err)
 		return
 	}
@@ -66,7 +74,7 @@ func (sender *metricsSender) sendMetrics(store *metricsStore) {
 	}
 }
 
-func (sender *metricsSender) sendBatch(metrics []model.Metrics) error {
+func (sender *metricsSender) sendBatch(ctx context.Context, metrics []model.Metrics) error {
 	body, err := buildRequestBody(
 		withGzipCompression(encodeJSON(metrics)),
 	)
@@ -74,5 +82,5 @@ func (sender *metricsSender) sendBatch(metrics []model.Metrics) error {
 		return err
 	}
 
-	return sender.post(sender.updatesURL, body)
+	return sender.post(ctx, sender.updatesURL, body)
 }

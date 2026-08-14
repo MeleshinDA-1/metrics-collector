@@ -27,7 +27,7 @@ func (handler *MetricsHandler) ValueMetricsJson(res http.ResponseWriter, req *ht
 
 	switch requestMetric.MType {
 	case "counter":
-		value, ok, err := handler.storage.GetCounter(requestMetric.ID)
+		value, ok, err := handler.storage.GetCounter(req.Context(), requestMetric.ID)
 		if err != nil {
 			writeError(res, http.StatusInternalServerError, err)
 			return
@@ -43,7 +43,7 @@ func (handler *MetricsHandler) ValueMetricsJson(res http.ResponseWriter, req *ht
 			return
 		}
 	case "gauge":
-		value, ok, err := handler.storage.GetGauge(requestMetric.ID)
+		value, ok, err := handler.storage.GetGauge(req.Context(), requestMetric.ID)
 		if err != nil {
 			writeError(res, http.StatusInternalServerError, err)
 			return
@@ -69,7 +69,7 @@ func (handler *MetricsHandler) ValueMetrics(res http.ResponseWriter, req *http.R
 
 	switch metricType {
 	case "counter":
-		value, ok, err := handler.storage.GetCounter(metricName)
+		value, ok, err := handler.storage.GetCounter(req.Context(), metricName)
 		if err != nil {
 			writeError(res, http.StatusInternalServerError, err)
 			return
@@ -81,7 +81,7 @@ func (handler *MetricsHandler) ValueMetrics(res http.ResponseWriter, req *http.R
 		res.Header().Set("Content-Type", "text/plain")
 		_, _ = res.Write([]byte(strconv.FormatInt(value, 10)))
 	case "gauge":
-		value, ok, err := handler.storage.GetGauge(metricName)
+		value, ok, err := handler.storage.GetGauge(req.Context(), metricName)
 		if err != nil {
 			writeError(res, http.StatusInternalServerError, err)
 			return

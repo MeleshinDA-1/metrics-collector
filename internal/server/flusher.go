@@ -43,7 +43,7 @@ func (f *Flusher) Start(
 	for {
 		select {
 		case <-ticker.C:
-			if err := f.metricsRepository.Flush(f.storage); err != nil {
+			if err := f.metricsRepository.Flush(ctx, f.storage); err != nil {
 				slog.Error("unable to save metrics", "error", err)
 			}
 

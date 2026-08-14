@@ -30,7 +30,7 @@ func (handler *PersistingMetricsHandler) UpdateMetrics(res http.ResponseWriter, 
 		writeError(res, status, err)
 		return
 	}
-	if err := handler.metricsRepository.Flush(handler.storage); err != nil {
+	if err := handler.metricsRepository.Flush(req.Context(), handler.storage); err != nil {
 		writeError(res, http.StatusInternalServerError, err)
 		return
 	}
@@ -44,7 +44,7 @@ func (handler *PersistingMetricsHandler) UpdateMetricsJson(res http.ResponseWrit
 		writeError(res, status, err)
 		return
 	}
-	if err := handler.metricsRepository.Flush(handler.storage); err != nil {
+	if err := handler.metricsRepository.Flush(req.Context(), handler.storage); err != nil {
 		writeError(res, http.StatusInternalServerError, err)
 		return
 	}
@@ -58,7 +58,7 @@ func (handler *PersistingMetricsHandler) UpdateBatchMetricsJson(res http.Respons
 		writeError(res, status, err)
 		return
 	}
-	if err := handler.metricsRepository.Flush(handler.storage); err != nil {
+	if err := handler.metricsRepository.Flush(req.Context(), handler.storage); err != nil {
 		writeError(res, http.StatusInternalServerError, err)
 		return
 	}

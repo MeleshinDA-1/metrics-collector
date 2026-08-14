@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"sync"
 
 	"github.com/MeleshinDA-1/metrics-collector/internal/model"
@@ -19,7 +20,7 @@ func NewMemStorage() *MemStorage {
 	}
 }
 
-func (storage *MemStorage) SetGauge(name string, value float64) error {
+func (storage *MemStorage) SetGauge(_ context.Context, name string, value float64) error {
 	storage.mutex.Lock()
 	defer storage.mutex.Unlock()
 
@@ -28,7 +29,7 @@ func (storage *MemStorage) SetGauge(name string, value float64) error {
 	return nil
 }
 
-func (storage *MemStorage) AddCounter(name string, delta int64) (int64, error) {
+func (storage *MemStorage) AddCounter(_ context.Context, name string, delta int64) (int64, error) {
 	storage.mutex.Lock()
 	defer storage.mutex.Unlock()
 
@@ -37,11 +38,7 @@ func (storage *MemStorage) AddCounter(name string, delta int64) (int64, error) {
 	return storage.counters[name], nil
 }
 
-func (storage *MemStorage) UpdateBatch(metrics []model.Metrics) error {
-	if err := validateBatch(metrics); err != nil {
-		return err
-	}
-
+func (storage *MemStorage) UpdateBatch(_ context.Context, metrics []model.Metrics) error {
 	storage.mutex.Lock()
 	defer storage.mutex.Unlock()
 
@@ -57,7 +54,7 @@ func (storage *MemStorage) UpdateBatch(metrics []model.Metrics) error {
 	return nil
 }
 
-func (storage *MemStorage) GetGauge(name string) (float64, bool, error) {
+func (storage *MemStorage) GetGauge(_ context.Context, name string) (float64, bool, error) {
 	storage.mutex.Lock()
 	defer storage.mutex.Unlock()
 
@@ -65,7 +62,7 @@ func (storage *MemStorage) GetGauge(name string) (float64, bool, error) {
 	return value, ok, nil
 }
 
-func (storage *MemStorage) GetCounter(name string) (int64, bool, error) {
+func (storage *MemStorage) GetCounter(_ context.Context, name string) (int64, bool, error) {
 	storage.mutex.Lock()
 	defer storage.mutex.Unlock()
 
@@ -73,7 +70,7 @@ func (storage *MemStorage) GetCounter(name string) (int64, bool, error) {
 	return value, ok, nil
 }
 
-func (storage *MemStorage) Snapshot() (model.MetricsSnapshot, error) {
+func (storage *MemStorage) Snapshot(_ context.Context) (model.MetricsSnapshot, error) {
 	storage.mutex.Lock()
 	defer storage.mutex.Unlock()
 

@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,8 +13,8 @@ import (
 
 func TestListMetrics(t *testing.T) {
 	storage := repository.NewMemStorage()
-	storage.SetGauge("Alloc", 42.5)
-	storage.AddCounter("PollCount", 2)
+	storage.SetGauge(context.Background(), "Alloc", 42.5)
+	storage.AddCounter(context.Background(), "PollCount", 2)
 	metricsHandler := NewMetricsHandler(storage)
 
 	request := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -41,7 +42,7 @@ func TestListMetrics(t *testing.T) {
 
 func TestListMetricsEscapesHTML(t *testing.T) {
 	storage := repository.NewMemStorage()
-	storage.SetGauge(`<script>alert("x")</script>`, 1)
+	storage.SetGauge(context.Background(), `<script>alert("x")</script>`, 1)
 	metricsHandler := NewMetricsHandler(storage)
 
 	request := httptest.NewRequest(http.MethodGet, "/", nil)

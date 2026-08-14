@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/MeleshinDA-1/metrics-collector/internal/model"
+	"github.com/MeleshinDA-1/metrics-collector/internal/retry"
 )
 
 func TestIsRetriableSendError(t *testing.T) {
@@ -63,12 +65,12 @@ func TestPostRebuildsBodyOnEveryAttempt(t *testing.T) {
 	}))
 	defer server.Close()
 
-	sender := newMetricsSender(server.URL, time.Second)
+	sender := newMetricsSender(server.URL, time.Second, retry.DefaultPolicy())
 	metricValue := 42.5
 	batch := []model.Metrics{{ID: "Alloc", MType: model.Gauge, Value: &metricValue}}
 
 	for attempt := 0; attempt < 2; attempt++ {
-		if err := sender.sendBatch(batch); err != nil {
+		if err := sender.sendBatch(context.Background(), batch); err != nil {
 			t.Fatalf("sendBatch returned error: %v", err)
 		}
 	}

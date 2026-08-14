@@ -1,37 +1,33 @@
 package retry
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
 )
 
-func swapIntervals(t *testing.T) {
-	t.Helper()
-
-	original := intervals
-	intervals = []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond}
-	t.Cleanup(func() { intervals = original })
+func fastPolicy() Policy {
+	return NewPolicy(time.Millisecond, time.Millisecond, time.Millisecond)
 }
 
-func TestIntervalsMatchIncrementPolicy(t *testing.T) {
+func TestDefaultPolicyMatchesIncrementPolicy(t *testing.T) {
 	want := []time.Duration{1 * time.Second, 3 * time.Second, 5 * time.Second}
+	got := DefaultPolicy().intervals
 
-	if len(intervals) != len(want) {
-		t.Fatalf("intervals count = %d, want %d", len(intervals), len(want))
+	if len(got) != len(want) {
+		t.Fatalf("intervals count = %d, want %d", len(got), len(want))
 	}
 	for i := range want {
-		if intervals[i] != want[i] {
-			t.Fatalf("intervals[%d] = %v, want %v", i, intervals[i], want[i])
+		if got[i] != want[i] {
+			t.Fatalf("intervals[%d] = %v, want %v", i, got[i], want[i])
 		}
 	}
 }
 
 func TestDoReturnsAfterFirstSuccess(t *testing.T) {
-	swapIntervals(t)
-
 	calls := 0
-	err := Do(func() error {
+	err := fastPolicy().Do(context.Background(), func(context.Context) error {
 		calls++
 		return nil
 	}, func(error) bool { return true })
@@ -45,10 +41,8 @@ func TestDoReturnsAfterFirstSuccess(t *testing.T) {
 }
 
 func TestDoRetriesUntilSuccess(t *testing.T) {
-	swapIntervals(t)
-
 	calls := 0
-	err := Do(func() error {
+	err := fastPolicy().Do(context.Background(), func(context.Context) error {
 		calls++
 		if calls < 3 {
 			return errors.New("temporary")
@@ -65,11 +59,9 @@ func TestDoRetriesUntilSuccess(t *testing.T) {
 }
 
 func TestDoGivesUpAfterThreeExtraAttempts(t *testing.T) {
-	swapIntervals(t)
-
 	calls := 0
 	wantErr := errors.New("temporary")
-	err := Do(func() error {
+	err := fastPolicy().Do(context.Background(), func(context.Context) error {
 		calls++
 		return wantErr
 	}, func(error) bool { return true })
@@ -83,10 +75,8 @@ func TestDoGivesUpAfterThreeExtraAttempts(t *testing.T) {
 }
 
 func TestDoDoesNotRetryNonRetriableError(t *testing.T) {
-	swapIntervals(t)
-
 	calls := 0
-	err := Do(func() error {
+	err := fastPolicy().Do(context.Background(), func(context.Context) error {
 		calls++
 		return errors.New("fatal")
 	}, func(error) bool { return false })
@@ -96,5 +86,35 @@ func TestDoDoesNotRetryNonRetriableError(t *testing.T) {
 	}
 	if calls != 1 {
 		t.Fatalf("calls = %d, want 1", calls)
+	}
+}
+
+func TestDoStopsWaitingOnCancelledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	policy := NewPolicy(time.Hour, time.Hour, time.Hour)
+	operationErr := errors.New("temporary")
+
+	calls := 0
+	done := make(chan error, 1)
+	go func() {
+		done <- policy.Do(ctx, func(context.Context) error {
+			calls++
+			cancel()
+			return operationErr
+		}, func(error) bool { return true })
+	}()
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, operationErr) || !errors.Is(err, context.Canceled) {
+			t.Fatalf("Do returned %v, want both the operation error and context.Canceled", err)
+		}
+		if calls != 1 {
+			t.Fatalf("calls = %d, want 1", calls)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Do kept waiting after the context was cancelled")
 	}
 }

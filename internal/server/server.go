@@ -13,6 +13,7 @@ import (
 	"github.com/MeleshinDA-1/metrics-collector/internal/handler/health"
 	"github.com/MeleshinDA-1/metrics-collector/internal/handler/metrics"
 	"github.com/MeleshinDA-1/metrics-collector/internal/repository"
+	"github.com/MeleshinDA-1/metrics-collector/internal/retry"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -44,7 +45,9 @@ func Run(serverConfig config.ServerConfig) error {
 		defer pool.Close()
 
 		pinger = pool
-		metricsEndpoints = metrics.NewMetricsHandler(repository.NewDbMetricStorage(pool))
+		metricsEndpoints = metrics.NewMetricsHandler(
+			repository.NewDbMetricStorage(pool, retry.DefaultPolicy()),
+		)
 
 	default:
 		storage := repository.NewMemStorage()
@@ -57,7 +60,7 @@ func Run(serverConfig config.ServerConfig) error {
 			}
 
 			if serverConfig.Restore {
-				if err := fileRepository.Restore(storage); err != nil {
+				if err := fileRepository.Restore(ctx, storage); err != nil {
 					return fmt.Errorf("restore metrics: %w", err)
 				}
 			}

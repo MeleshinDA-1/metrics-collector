@@ -29,7 +29,7 @@ func (handler *MetricsHandler) updateMetrics(req *http.Request) (int, error) {
 		if err != nil {
 			return http.StatusBadRequest, err
 		}
-		if _, err := handler.storage.AddCounter(metricName, value); err != nil {
+		if _, err := handler.storage.AddCounter(req.Context(), metricName, value); err != nil {
 			return http.StatusInternalServerError, err
 		}
 	case "gauge":
@@ -37,7 +37,7 @@ func (handler *MetricsHandler) updateMetrics(req *http.Request) (int, error) {
 		if err != nil {
 			return http.StatusBadRequest, err
 		}
-		if err := handler.storage.SetGauge(metricName, value); err != nil {
+		if err := handler.storage.SetGauge(req.Context(), metricName, value); err != nil {
 			return http.StatusInternalServerError, err
 		}
 	default:
@@ -68,7 +68,7 @@ func (handler *MetricsHandler) updateMetricsJSON(req *http.Request) (model.Metri
 		if requestMetric.Delta == nil {
 			return model.Metrics{}, http.StatusBadRequest, fmt.Errorf("delta is required")
 		}
-		value, err := handler.storage.AddCounter(requestMetric.ID, *requestMetric.Delta)
+		value, err := handler.storage.AddCounter(req.Context(), requestMetric.ID, *requestMetric.Delta)
 		if err != nil {
 			return model.Metrics{}, http.StatusInternalServerError, err
 		}
@@ -78,7 +78,7 @@ func (handler *MetricsHandler) updateMetricsJSON(req *http.Request) (model.Metri
 		if requestMetric.Value == nil {
 			return model.Metrics{}, http.StatusBadRequest, fmt.Errorf("value is required")
 		}
-		if err := handler.storage.SetGauge(requestMetric.ID, *requestMetric.Value); err != nil {
+		if err := handler.storage.SetGauge(req.Context(), requestMetric.ID, *requestMetric.Value); err != nil {
 			return model.Metrics{}, http.StatusInternalServerError, err
 		}
 		requestMetric.Delta = nil
@@ -123,7 +123,7 @@ func (handler *MetricsHandler) updateBatchMetricsJSON(req *http.Request) ([]mode
 		}
 	}
 
-	if err := handler.storage.UpdateBatch(requestMetrics); err != nil {
+	if err := handler.storage.UpdateBatch(req.Context(), requestMetrics); err != nil {
 		return nil, http.StatusInternalServerError, err
 	}
 

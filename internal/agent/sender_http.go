@@ -2,13 +2,12 @@ package agent
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
-
-	"github.com/MeleshinDA-1/metrics-collector/internal/retry"
 )
 
 const (
@@ -34,14 +33,14 @@ func isRetriableSendError(err error) bool {
 	return errors.As(err, &transportErr)
 }
 
-func (sender *metricsSender) post(url string, body []byte) error {
-	return retry.Do(func() error {
-		return sender.doPost(url, body)
+func (sender *metricsSender) post(ctx context.Context, url string, body []byte) error {
+	return sender.retryPolicy.Do(ctx, func(ctx context.Context) error {
+		return sender.doPost(ctx, url, body)
 	}, isRetriableSendError)
 }
 
-func (sender *metricsSender) doPost(url string, body []byte) error {
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+func (sender *metricsSender) doPost(ctx context.Context, url string, body []byte) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}

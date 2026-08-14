@@ -18,23 +18,26 @@ const (
 
 	addCounterQuery = `INSERT INTO counters (metric_name, value) VALUES ($1, $2)
 		 ON CONFLICT (metric_name) DO UPDATE
-		 SET value = counters.value + EXCLUDED.value, updated_at_utc = now()
-		 RETURNING value`
+		 SET value = counters.value + EXCLUDED.value, updated_at_utc = now()`
+
+	addCounterReturningQuery = addCounterQuery + ` RETURNING value`
 )
 
 type DbMetricStorage struct {
-	pool *pgxpool.Pool
+	pool        *pgxpool.Pool
+	retryPolicy retry.Policy
 }
 
-func NewDbMetricStorage(pool *pgxpool.Pool) *DbMetricStorage {
+func NewDbMetricStorage(pool *pgxpool.Pool, retryPolicy retry.Policy) *DbMetricStorage {
 	return &DbMetricStorage{
-		pool: pool,
+		pool:        pool,
+		retryPolicy: retryPolicy,
 	}
 }
 
-func (storage *DbMetricStorage) SetGauge(name string, value float64) error {
-	err := retry.Do(func() error {
-		_, err := storage.pool.Exec(context.TODO(), setGaugeQuery, name, value)
+func (storage *DbMetricStorage) SetGauge(ctx context.Context, name string, value float64) error {
+	err := storage.retryPolicy.Do(ctx, func(ctx context.Context) error {
+		_, err := storage.pool.Exec(ctx, setGaugeQuery, name, value)
 		return err
 	}, isRetriablePgError)
 	if err != nil {
@@ -44,11 +47,11 @@ func (storage *DbMetricStorage) SetGauge(name string, value float64) error {
 	return nil
 }
 
-func (storage *DbMetricStorage) AddCounter(name string, delta int64) (int64, error) {
+func (storage *DbMetricStorage) AddCounter(ctx context.Context, name string, delta int64) (int64, error) {
 	var value int64
 
-	err := retry.Do(func() error {
-		return storage.pool.QueryRow(context.TODO(), addCounterQuery, name, delta).Scan(&value)
+	err := storage.retryPolicy.Do(ctx, func(ctx context.Context) error {
+		return storage.pool.QueryRow(ctx, addCounterReturningQuery, name, delta).Scan(&value)
 	}, isRetriablePgError)
 	if err != nil {
 		return 0, fmt.Errorf("add counter %q: %w", name, err)
@@ -57,16 +60,13 @@ func (storage *DbMetricStorage) AddCounter(name string, delta int64) (int64, err
 	return value, nil
 }
 
-func (storage *DbMetricStorage) UpdateBatch(metrics []model.Metrics) error {
-	if err := validateBatch(metrics); err != nil {
-		return err
-	}
+func (storage *DbMetricStorage) UpdateBatch(ctx context.Context, metrics []model.Metrics) error {
 	if len(metrics) == 0 {
 		return nil
 	}
 
-	err := retry.Do(func() error {
-		return storage.updateBatch(metrics)
+	err := storage.retryPolicy.Do(ctx, func(ctx context.Context) error {
+		return storage.updateBatch(ctx, metrics)
 	}, isRetriablePgError)
 	if err != nil {
 		return fmt.Errorf("update batch: %w", err)
@@ -75,9 +75,7 @@ func (storage *DbMetricStorage) UpdateBatch(metrics []model.Metrics) error {
 	return nil
 }
 
-func (storage *DbMetricStorage) updateBatch(metrics []model.Metrics) error {
-	ctx := context.TODO()
-
+func (storage *DbMetricStorage) updateBatch(ctx context.Context, metrics []model.Metrics) error {
 	batch := &pgx.Batch{}
 	for _, metric := range metrics {
 		switch metric.MType {
@@ -108,11 +106,11 @@ func (storage *DbMetricStorage) updateBatch(metrics []model.Metrics) error {
 	return tx.Commit(ctx)
 }
 
-func (storage *DbMetricStorage) GetGauge(name string) (float64, bool, error) {
+func (storage *DbMetricStorage) GetGauge(ctx context.Context, name string) (float64, bool, error) {
 	var value float64
 
-	err := retry.Do(func() error {
-		return storage.pool.QueryRow(context.TODO(),
+	err := storage.retryPolicy.Do(ctx, func(ctx context.Context) error {
+		return storage.pool.QueryRow(ctx,
 			`SELECT value FROM gauges WHERE metric_name = $1`, name).Scan(&value)
 	}, isRetriablePgError)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -125,11 +123,11 @@ func (storage *DbMetricStorage) GetGauge(name string) (float64, bool, error) {
 	return value, true, nil
 }
 
-func (storage *DbMetricStorage) GetCounter(name string) (int64, bool, error) {
+func (storage *DbMetricStorage) GetCounter(ctx context.Context, name string) (int64, bool, error) {
 	var value int64
 
-	err := retry.Do(func() error {
-		return storage.pool.QueryRow(context.TODO(),
+	err := storage.retryPolicy.Do(ctx, func(ctx context.Context) error {
+		return storage.pool.QueryRow(ctx,
 			`SELECT value FROM counters WHERE metric_name = $1`, name).Scan(&value)
 	}, isRetriablePgError)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -142,12 +140,12 @@ func (storage *DbMetricStorage) GetCounter(name string) (int64, bool, error) {
 	return value, true, nil
 }
 
-func (storage *DbMetricStorage) Snapshot() (model.MetricsSnapshot, error) {
+func (storage *DbMetricStorage) Snapshot(ctx context.Context) (model.MetricsSnapshot, error) {
 	var snapshot model.MetricsSnapshot
 
-	err := retry.Do(func() error {
+	err := storage.retryPolicy.Do(ctx, func(ctx context.Context) error {
 		var err error
-		snapshot, err = storage.snapshot()
+		snapshot, err = storage.snapshot(ctx)
 		return err
 	}, isRetriablePgError)
 	if err != nil {
@@ -157,8 +155,7 @@ func (storage *DbMetricStorage) Snapshot() (model.MetricsSnapshot, error) {
 	return snapshot, nil
 }
 
-func (storage *DbMetricStorage) snapshot() (model.MetricsSnapshot, error) {
-	ctx := context.TODO()
+func (storage *DbMetricStorage) snapshot(ctx context.Context) (model.MetricsSnapshot, error) {
 	snapshot := model.MetricsSnapshot{
 		Gauges:   make(map[string]float64),
 		Counters: make(map[string]int64),

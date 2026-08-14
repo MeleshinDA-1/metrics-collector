@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -18,10 +19,10 @@ type metricsRepositorySpy struct {
 	snapshot   model.MetricsSnapshot
 }
 
-func (repo *metricsRepositorySpy) Flush(storage repository.MetricsSnapshotProvider) error {
+func (repo *metricsRepositorySpy) Flush(ctx context.Context, storage repository.MetricsSnapshotProvider) error {
 	repo.flushCalls++
 
-	snapshot, err := storage.Snapshot()
+	snapshot, err := storage.Snapshot(ctx)
 	if err != nil {
 		return err
 	}
@@ -48,11 +49,11 @@ func TestUpdateMetricsSavesSynchronously(t *testing.T) {
 	}
 
 	restoredStorage := repository.NewMemStorage()
-	if err := fileRepository.Restore(restoredStorage); err != nil {
+	if err := fileRepository.Restore(context.Background(), restoredStorage); err != nil {
 		t.Fatalf("restore metrics: %v", err)
 	}
 
-	value, ok, err := restoredStorage.GetCounter("PollCount")
+	value, ok, err := restoredStorage.GetCounter(context.Background(), "PollCount")
 	if err != nil {
 		t.Fatalf("get counter: %v", err)
 	}

@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,8 +13,8 @@ import (
 
 func TestValueMetrics(t *testing.T) {
 	storage := repository.NewMemStorage()
-	storage.SetGauge("Alloc", 42.5)
-	storage.AddCounter("PollCount", 2)
+	storage.SetGauge(context.Background(), "Alloc", 42.5)
+	storage.AddCounter(context.Background(), "PollCount", 2)
 	metricsHandler := NewMetricsHandler(storage)
 
 	tests := []struct {

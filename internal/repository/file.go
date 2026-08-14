@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,7 +17,7 @@ type FileMetricsRepository struct {
 	mutex    sync.Mutex
 }
 
-func (repo *FileMetricsRepository) Flush(storage MetricsSnapshotProvider) error {
+func (repo *FileMetricsRepository) Flush(ctx context.Context, storage MetricsSnapshotProvider) error {
 	repo.mutex.Lock()
 	defer repo.mutex.Unlock()
 
@@ -26,7 +27,7 @@ func (repo *FileMetricsRepository) Flush(storage MetricsSnapshotProvider) error 
 	}
 	defer file.Close()
 
-	snapshot, err := storage.Snapshot()
+	snapshot, err := storage.Snapshot(ctx)
 	if err != nil {
 		return err
 	}
@@ -59,7 +60,7 @@ func (repo *FileMetricsRepository) Flush(storage MetricsSnapshotProvider) error 
 	return nil
 }
 
-func (repo *FileMetricsRepository) Restore(storage MetricsWriter) error {
+func (repo *FileMetricsRepository) Restore(ctx context.Context, storage MetricsWriter) error {
 	file, err := os.Open(repo.FilePath)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
@@ -82,14 +83,14 @@ func (repo *FileMetricsRepository) Restore(storage MetricsWriter) error {
 			if metric.Value == nil {
 				return fmt.Errorf("gauge %q has no value", metric.ID)
 			}
-			if err := storage.SetGauge(metric.ID, *metric.Value); err != nil {
+			if err := storage.SetGauge(ctx, metric.ID, *metric.Value); err != nil {
 				return err
 			}
 		case model.Counter:
 			if metric.Delta == nil {
 				return fmt.Errorf("counter %q has no delta", metric.ID)
 			}
-			if _, err := storage.AddCounter(metric.ID, *metric.Delta); err != nil {
+			if _, err := storage.AddCounter(ctx, metric.ID, *metric.Delta); err != nil {
 				return err
 			}
 		default:

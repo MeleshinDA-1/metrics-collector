@@ -2,6 +2,7 @@ package agent
 
 import (
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/MeleshinDA-1/metrics-collector/internal/model"
+	"github.com/MeleshinDA-1/metrics-collector/internal/retry"
 )
 
 func TestMetricsSenderSendBatchReturnsErrorOnUnexpectedStatus(t *testing.T) {
@@ -18,9 +20,9 @@ func TestMetricsSenderSendBatchReturnsErrorOnUnexpectedStatus(t *testing.T) {
 	}))
 	defer server.Close()
 
-	sender := newMetricsSender(server.URL, time.Second)
+	sender := newMetricsSender(server.URL, time.Second, retry.DefaultPolicy())
 
-	err := sender.sendBatch([]model.Metrics{{ID: "Alloc", MType: model.Gauge}})
+	err := sender.sendBatch(context.Background(), []model.Metrics{{ID: "Alloc", MType: model.Gauge}})
 	if err == nil {
 		t.Fatal("sendBatch returned nil error, want non-nil error")
 	}
@@ -61,7 +63,7 @@ func TestMetricsSenderSendMetrics(t *testing.T) {
 		},
 	)
 
-	sender := newMetricsSender(server.URL, time.Second)
+	sender := newMetricsSender(server.URL, time.Second, retry.DefaultPolicy())
 	sender.sendMetrics(store)
 
 	gaugeValue := 42.5
@@ -111,7 +113,7 @@ func TestMetricsSenderSkipsEmptyBatch(t *testing.T) {
 	}))
 	defer server.Close()
 
-	sender := newMetricsSender(server.URL, time.Second)
+	sender := newMetricsSender(server.URL, time.Second, retry.DefaultPolicy())
 	sender.sendMetrics(newMetricsStore())
 
 	if requestCount != 0 {
@@ -148,7 +150,7 @@ func TestMetricsSenderKeepsCounterAfterFailedSend(t *testing.T) {
 		},
 	)
 
-	sender := newMetricsSender(server.URL, time.Second)
+	sender := newMetricsSender(server.URL, time.Second, retry.DefaultPolicy())
 	sender.sendMetrics(store)
 
 	assertMetricsSnapshot(t, store.snapshot(), metricsSnapshot{
