@@ -38,7 +38,7 @@ func (handler *PersistingMetricsHandler) UpdateMetrics(res http.ResponseWriter, 
 	res.WriteHeader(http.StatusOK)
 }
 
-func (handler *PersistingMetricsHandler) UpdateMetricsJson(res http.ResponseWriter, req *http.Request) {
+func (handler *PersistingMetricsHandler) UpdateMetricsJSON(res http.ResponseWriter, req *http.Request) {
 	requestMetric, status, err := handler.updateMetricsJSON(req)
 	if err != nil {
 		writeError(res, status, err)
@@ -52,7 +52,7 @@ func (handler *PersistingMetricsHandler) UpdateMetricsJson(res http.ResponseWrit
 	writeMetricsJSON(res, requestMetric)
 }
 
-func (handler *PersistingMetricsHandler) UpdateBatchMetricsJson(res http.ResponseWriter, req *http.Request) {
+func (handler *PersistingMetricsHandler) UpdateBatchMetricsJSON(res http.ResponseWriter, req *http.Request) {
 	requestMetrics, status, err := handler.updateBatchMetricsJSON(req)
 	if err != nil {
 		writeError(res, status, err)

@@ -1,11 +1,15 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -51,36 +55,56 @@ func TestIsRetriableSendError(t *testing.T) {
 }
 
 func TestPostRebuildsBodyOnEveryAttempt(t *testing.T) {
-	receivedBodies := make([]int, 0, 2)
+	var (
+		mutex          sync.Mutex
+		receivedBodies [][]byte
+	)
+
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		metrics, err := decodeGzipMetricsBatch(request)
+		body, err := io.ReadAll(request.Body)
 		if err != nil {
-			t.Errorf("read compressed batch: %v", err)
+			t.Errorf("read request body: %v", err)
 			response.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		receivedBodies = append(receivedBodies, len(metrics))
+
+		mutex.Lock()
+		receivedBodies = append(receivedBodies, body)
+		attempt := len(receivedBodies)
+		mutex.Unlock()
+
+		if attempt == 1 {
+			panic(http.ErrAbortHandler)
+		}
 
 		response.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
 
-	sender := newMetricsSender(server.URL, time.Second, retry.DefaultPolicy())
+	sender := newMetricsSender(server.URL, time.Second, retry.NewPolicy(time.Millisecond))
 	metricValue := 42.5
 	batch := []model.Metrics{{ID: "Alloc", MType: model.Gauge, Value: &metricValue}}
 
-	for attempt := 0; attempt < 2; attempt++ {
-		if err := sender.sendBatch(context.Background(), batch); err != nil {
-			t.Fatalf("sendBatch returned error: %v", err)
-		}
+	if err := sender.sendBatch(context.Background(), batch); err != nil {
+		t.Fatalf("sendBatch returned error: %v", err)
 	}
+
+	mutex.Lock()
+	defer mutex.Unlock()
 
 	if len(receivedBodies) != 2 {
 		t.Fatalf("requests count = %d, want 2", len(receivedBodies))
 	}
-	for i, count := range receivedBodies {
-		if count != 1 {
-			t.Fatalf("request %d carried %d metrics, want 1", i, count)
-		}
+	if !bytes.Equal(receivedBodies[0], receivedBodies[1]) {
+		t.Fatalf("retry sent a different body: %d bytes on the first attempt, %d bytes on the second",
+			len(receivedBodies[0]), len(receivedBodies[1]))
+	}
+
+	metrics, err := decodeGzipMetricsBatch(bytes.NewReader(receivedBodies[1]))
+	if err != nil {
+		t.Fatalf("read compressed batch of the retried request: %v", err)
+	}
+	if !reflect.DeepEqual(metrics, batch) {
+		t.Fatalf("retried request carried %v, want %v", metrics, batch)
 	}
 }

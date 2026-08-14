@@ -17,7 +17,7 @@ func NewPingHandler(pinger DBPinger) *PingHandler {
 	return &PingHandler{pinger: pinger}
 }
 
-func (ph *PingHandler) PingDb(w http.ResponseWriter, r *http.Request) {
+func (ph *PingHandler) PingDB(w http.ResponseWriter, r *http.Request) {
 	if ph.pinger == nil {
 		http.Error(w, "database connection is not initialized", http.StatusInternalServerError)
 		return

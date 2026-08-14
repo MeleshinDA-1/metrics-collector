@@ -9,7 +9,7 @@ import (
 	"github.com/MeleshinDA-1/metrics-collector/internal/model"
 )
 
-func (handler *MetricsHandler) ValueMetricsJson(res http.ResponseWriter, req *http.Request) {
+func (handler *MetricsHandler) ValueMetricsJSON(res http.ResponseWriter, req *http.Request) {
 	var requestMetric model.Metrics
 	if err := json.NewDecoder(req.Body).Decode(&requestMetric); err != nil {
 		http.Error(res, err.Error(), http.StatusBadRequest)

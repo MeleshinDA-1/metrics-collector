@@ -20,7 +20,7 @@ func (p pingerStub) Ping(context.Context) error {
 	return p.err
 }
 
-func TestPingDb(t *testing.T) {
+func TestPingDB(t *testing.T) {
 	tests := []struct {
 		name           string
 		pinger         DBPinger

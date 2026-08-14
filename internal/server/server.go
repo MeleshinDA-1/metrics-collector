@@ -36,7 +36,7 @@ func Run(serverConfig config.ServerConfig) error {
 			return fmt.Errorf("run database migrations: %w", err)
 		}
 
-		pool, err := initDb(
+		pool, err := initDB(
 			serverConfig.PostgresConnectionString,
 		)
 		if err != nil {
@@ -46,7 +46,7 @@ func Run(serverConfig config.ServerConfig) error {
 
 		pinger = pool
 		metricsEndpoints = metrics.NewMetricsHandler(
-			repository.NewDbMetricStorage(pool, retry.DefaultPolicy()),
+			repository.NewDBMetricStorage(pool, retry.DefaultPolicy()),
 		)
 
 	default:

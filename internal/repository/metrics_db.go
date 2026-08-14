@@ -23,19 +23,19 @@ const (
 	addCounterReturningQuery = addCounterQuery + ` RETURNING value`
 )
 
-type DbMetricStorage struct {
+type DBMetricStorage struct {
 	pool        *pgxpool.Pool
 	retryPolicy retry.Policy
 }
 
-func NewDbMetricStorage(pool *pgxpool.Pool, retryPolicy retry.Policy) *DbMetricStorage {
-	return &DbMetricStorage{
+func NewDBMetricStorage(pool *pgxpool.Pool, retryPolicy retry.Policy) *DBMetricStorage {
+	return &DBMetricStorage{
 		pool:        pool,
 		retryPolicy: retryPolicy,
 	}
 }
 
-func (storage *DbMetricStorage) SetGauge(ctx context.Context, name string, value float64) error {
+func (storage *DBMetricStorage) SetGauge(ctx context.Context, name string, value float64) error {
 	err := storage.retryPolicy.Do(ctx, func(ctx context.Context) error {
 		_, err := storage.pool.Exec(ctx, setGaugeQuery, name, value)
 		return err
@@ -47,7 +47,7 @@ func (storage *DbMetricStorage) SetGauge(ctx context.Context, name string, value
 	return nil
 }
 
-func (storage *DbMetricStorage) AddCounter(ctx context.Context, name string, delta int64) (int64, error) {
+func (storage *DBMetricStorage) AddCounter(ctx context.Context, name string, delta int64) (int64, error) {
 	var value int64
 
 	err := storage.retryPolicy.Do(ctx, func(ctx context.Context) error {
@@ -60,7 +60,7 @@ func (storage *DbMetricStorage) AddCounter(ctx context.Context, name string, del
 	return value, nil
 }
 
-func (storage *DbMetricStorage) UpdateBatch(ctx context.Context, metrics []model.Metrics) error {
+func (storage *DBMetricStorage) UpdateBatch(ctx context.Context, metrics []model.Metrics) error {
 	if len(metrics) == 0 {
 		return nil
 	}
@@ -75,15 +75,25 @@ func (storage *DbMetricStorage) UpdateBatch(ctx context.Context, metrics []model
 	return nil
 }
 
-func (storage *DbMetricStorage) updateBatch(ctx context.Context, metrics []model.Metrics) error {
+func (storage *DBMetricStorage) updateBatch(ctx context.Context, metrics []model.Metrics) error {
 	batch := &pgx.Batch{}
 	for _, metric := range metrics {
 		switch metric.MType {
 		case model.Gauge:
+			if metric.Value == nil {
+				return fmt.Errorf("gauge %q has no value", metric.ID)
+			}
 			batch.Queue(setGaugeQuery, metric.ID, *metric.Value)
 		case model.Counter:
+			if metric.Delta == nil {
+				return fmt.Errorf("counter %q has no delta", metric.ID)
+			}
 			batch.Queue(addCounterQuery, metric.ID, *metric.Delta)
 		}
+	}
+
+	if batch.Len() == 0 {
+		return nil
 	}
 
 	tx, err := storage.pool.Begin(ctx)
@@ -93,7 +103,7 @@ func (storage *DbMetricStorage) updateBatch(ctx context.Context, metrics []model
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	results := tx.SendBatch(ctx, batch)
-	for range metrics {
+	for i := 0; i < batch.Len(); i++ {
 		if _, err := results.Exec(); err != nil {
 			_ = results.Close()
 			return err
@@ -106,7 +116,7 @@ func (storage *DbMetricStorage) updateBatch(ctx context.Context, metrics []model
 	return tx.Commit(ctx)
 }
 
-func (storage *DbMetricStorage) GetGauge(ctx context.Context, name string) (float64, bool, error) {
+func (storage *DBMetricStorage) GetGauge(ctx context.Context, name string) (float64, bool, error) {
 	var value float64
 
 	err := storage.retryPolicy.Do(ctx, func(ctx context.Context) error {
@@ -123,7 +133,7 @@ func (storage *DbMetricStorage) GetGauge(ctx context.Context, name string) (floa
 	return value, true, nil
 }
 
-func (storage *DbMetricStorage) GetCounter(ctx context.Context, name string) (int64, bool, error) {
+func (storage *DBMetricStorage) GetCounter(ctx context.Context, name string) (int64, bool, error) {
 	var value int64
 
 	err := storage.retryPolicy.Do(ctx, func(ctx context.Context) error {
@@ -140,7 +150,7 @@ func (storage *DbMetricStorage) GetCounter(ctx context.Context, name string) (in
 	return value, true, nil
 }
 
-func (storage *DbMetricStorage) Snapshot(ctx context.Context) (model.MetricsSnapshot, error) {
+func (storage *DBMetricStorage) Snapshot(ctx context.Context) (model.MetricsSnapshot, error) {
 	var snapshot model.MetricsSnapshot
 
 	err := storage.retryPolicy.Do(ctx, func(ctx context.Context) error {
@@ -155,7 +165,7 @@ func (storage *DbMetricStorage) Snapshot(ctx context.Context) (model.MetricsSnap
 	return snapshot, nil
 }
 
-func (storage *DbMetricStorage) snapshot(ctx context.Context) (model.MetricsSnapshot, error) {
+func (storage *DBMetricStorage) snapshot(ctx context.Context) (model.MetricsSnapshot, error) {
 	snapshot := model.MetricsSnapshot{
 		Gauges:   make(map[string]float64),
 		Counters: make(map[string]int64),

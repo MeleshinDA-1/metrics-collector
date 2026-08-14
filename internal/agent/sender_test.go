@@ -4,6 +4,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -36,7 +37,7 @@ func TestMetricsSenderSendMetrics(t *testing.T) {
 	mediaType := ""
 	contentEncoding := ""
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		metrics, err := decodeGzipMetricsBatch(request)
+		metrics, err := decodeGzipMetricsBatch(request.Body)
 		if err != nil {
 			t.Errorf("read compressed batch: %v", err)
 			response.WriteHeader(http.StatusBadRequest)
@@ -121,8 +122,8 @@ func TestMetricsSenderSkipsEmptyBatch(t *testing.T) {
 	}
 }
 
-func decodeGzipMetricsBatch(request *http.Request) ([]model.Metrics, error) {
-	reader, err := gzip.NewReader(request.Body)
+func decodeGzipMetricsBatch(body io.Reader) ([]model.Metrics, error) {
+	reader, err := gzip.NewReader(body)
 	if err != nil {
 		return nil, err
 	}
