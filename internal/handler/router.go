@@ -20,13 +20,21 @@ type PingEndpoints interface {
 	PingDB(http.ResponseWriter, *http.Request)
 }
 
-func NewRouter(metricsEndpoints MetricsEndpoints, pingEndpoints PingEndpoints) http.Handler {
+func NewRouter(
+	metricsEndpoints MetricsEndpoints,
+	pingEndpoints PingEndpoints,
+	signingKey string,
+) http.Handler {
 	router := mux.NewRouter()
 
 	registerMetricsRoutes(router, metricsEndpoints)
 	registerPingRoutes(router, pingEndpoints)
 
-	return middleware.LoggingMiddleware(middleware.CompressingMiddleware(router))
+	return middleware.LoggingMiddleware(
+		middleware.SigningMiddleware(signingKey)(
+			middleware.CompressingMiddleware(router),
+		),
+	)
 }
 
 func registerMetricsRoutes(r *mux.Router, metricsEndpoints MetricsEndpoints) {

@@ -13,5 +13,5 @@ func main() {
 		log.Fatal(err)
 	}
 
-	agent.Run(agentConfig.ServerAddress, agentConfig.PollInterval, agentConfig.ReportInterval)
+	agent.Run(agentConfig)
 }

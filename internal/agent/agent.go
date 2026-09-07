@@ -1,17 +1,21 @@
 package agent
 
 import (
-	"time"
-
+	"github.com/MeleshinDA-1/metrics-collector/internal/config"
 	"github.com/MeleshinDA-1/metrics-collector/internal/retry"
 )
 
-func Run(serverAddress string, pollInterval time.Duration, reportInterval time.Duration) {
+func Run(agentConfig config.AgentConfig) {
 	store := newMetricsStore()
 	collectMetrics(store)
 
-	sender := newMetricsSender(serverAddress, reportInterval, retry.DefaultPolicy())
+	sender := newMetricsSender(
+		agentConfig.ServerAddress,
+		agentConfig.ReportInterval,
+		agentConfig.Key,
+		retry.DefaultPolicy(),
+	)
 
-	go runCollector(store, pollInterval)
+	go runCollector(store, agentConfig.PollInterval)
 	sender.run(store)
 }

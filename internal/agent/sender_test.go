@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -21,7 +23,7 @@ func TestMetricsSenderSendBatchReturnsErrorOnUnexpectedStatus(t *testing.T) {
 	}))
 	defer server.Close()
 
-	sender := newMetricsSender(server.URL, time.Second, retry.DefaultPolicy())
+	sender := newMetricsSender(server.URL, time.Second, "", retry.DefaultPolicy())
 
 	err := sender.sendBatch(context.Background(), []model.Metrics{{ID: "Alloc", MType: model.Gauge}})
 	if err == nil {
@@ -30,12 +32,16 @@ func TestMetricsSenderSendBatchReturnsErrorOnUnexpectedStatus(t *testing.T) {
 }
 
 func TestMetricsSenderSendMetrics(t *testing.T) {
-	receivedMetrics := make([]model.Metrics, 0, 2)
-	requestCount := 0
-	requestMethod := ""
-	requestPath := ""
-	mediaType := ""
-	contentEncoding := ""
+	var (
+		mutex           sync.Mutex
+		receivedMetrics []model.Metrics
+		requestCount    int
+		requestMethod   string
+		requestPath     string
+		mediaType       string
+		contentEncoding string
+	)
+
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		metrics, err := decodeGzipMetricsBatch(request.Body)
 		if err != nil {
@@ -43,12 +49,15 @@ func TestMetricsSenderSendMetrics(t *testing.T) {
 			response.WriteHeader(http.StatusBadRequest)
 			return
 		}
+
+		mutex.Lock()
 		requestCount++
 		requestMethod = request.Method
 		requestPath = request.URL.Path
 		mediaType = request.Header.Get("Content-Type")
 		contentEncoding = request.Header.Get("Content-Encoding")
 		receivedMetrics = append(receivedMetrics, metrics...)
+		mutex.Unlock()
 
 		response.WriteHeader(http.StatusOK)
 	}))
@@ -64,8 +73,11 @@ func TestMetricsSenderSendMetrics(t *testing.T) {
 		},
 	)
 
-	sender := newMetricsSender(server.URL, time.Second, retry.DefaultPolicy())
+	sender := newMetricsSender(server.URL, time.Second, "", retry.DefaultPolicy())
 	sender.sendMetrics(store)
+
+	mutex.Lock()
+	defer mutex.Unlock()
 
 	gaugeValue := 42.5
 	counterDelta := int64(2)
@@ -107,18 +119,19 @@ func TestMetricsSenderSendMetrics(t *testing.T) {
 }
 
 func TestMetricsSenderSkipsEmptyBatch(t *testing.T) {
-	requestCount := 0
+	var requestCount atomic.Int64
+
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		requestCount++
+		requestCount.Add(1)
 		response.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
 
-	sender := newMetricsSender(server.URL, time.Second, retry.DefaultPolicy())
+	sender := newMetricsSender(server.URL, time.Second, "", retry.DefaultPolicy())
 	sender.sendMetrics(newMetricsStore())
 
-	if requestCount != 0 {
-		t.Fatalf("requests count = %d, want 0", requestCount)
+	if got := requestCount.Load(); got != 0 {
+		t.Fatalf("requests count = %d, want 0", got)
 	}
 }
 
@@ -151,7 +164,7 @@ func TestMetricsSenderKeepsCounterAfterFailedSend(t *testing.T) {
 		},
 	)
 
-	sender := newMetricsSender(server.URL, time.Second, retry.DefaultPolicy())
+	sender := newMetricsSender(server.URL, time.Second, "", retry.DefaultPolicy())
 	sender.sendMetrics(store)
 
 	assertMetricsSnapshot(t, store.snapshot(), metricsSnapshot{

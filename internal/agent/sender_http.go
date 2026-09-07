@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/MeleshinDA-1/metrics-collector/internal/hash"
 )
 
 const (
@@ -47,6 +49,9 @@ func (sender *metricsSender) doPost(ctx context.Context, url string, body []byte
 
 	req.Header.Set("Content-Type", jsonMediaType)
 	req.Header.Set("Content-Encoding", gzipEncoding)
+	if sender.signingKey != "" {
+		req.Header.Set(hash.Header, hash.Sign(body, sender.signingKey))
+	}
 
 	resp, err := sender.httpClient.Do(req)
 	if err != nil {

@@ -78,7 +78,11 @@ func Run(serverConfig config.ServerConfig) error {
 		}
 	}
 
-	router := handler.NewRouter(metricsEndpoints, health.NewPingHandler(pinger))
+	router := handler.NewRouter(
+		metricsEndpoints,
+		health.NewPingHandler(pinger),
+		serverConfig.Key,
+	)
 
 	return http.ListenAndServe(serverConfig.Address, router)
 }

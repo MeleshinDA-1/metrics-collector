@@ -14,12 +14,14 @@ type metricsSender struct {
 	httpClient     *http.Client
 	updatesURL     string
 	reportInterval time.Duration
+	signingKey     string
 	retryPolicy    retry.Policy
 }
 
 func newMetricsSender(
 	serverAddress string,
 	reportInterval time.Duration,
+	signingKey string,
 	retryPolicy retry.Policy,
 ) *metricsSender {
 	return &metricsSender{
@@ -28,6 +30,7 @@ func newMetricsSender(
 		},
 		updatesURL:     normalizeServerAddress(serverAddress) + "/updates/",
 		reportInterval: reportInterval,
+		signingKey:     signingKey,
 		retryPolicy:    retryPolicy,
 	}
 }
