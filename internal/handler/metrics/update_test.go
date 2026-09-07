@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/MeleshinDA-1/metrics-collector/internal/handler"
+	"github.com/MeleshinDA-1/metrics-collector/internal/handler/health"
 	"github.com/MeleshinDA-1/metrics-collector/internal/model"
 	"github.com/MeleshinDA-1/metrics-collector/internal/repository"
 	"github.com/gorilla/mux"
@@ -170,7 +171,7 @@ func TestUpdateMetricsJSONResponse(t *testing.T) {
 		)
 		request.Header.Set("Content-Type", "application/json")
 		response = httptest.NewRecorder()
-		handler.NewRouter(metricsHandler).ServeHTTP(response, request)
+		handler.NewRouter(metricsHandler, health.NewPingHandler(nil)).ServeHTTP(response, request)
 	}
 
 	if response.Code != http.StatusOK {
@@ -235,7 +236,7 @@ func handleUpdateMetricsWithHandler(metricsHandler handler.MetricsEndpoints, req
 	)
 	req := httptest.NewRequest(request.method, target, nil)
 	response := httptest.NewRecorder()
-	handler.NewRouter(metricsHandler).ServeHTTP(response, req)
+	handler.NewRouter(metricsHandler, health.NewPingHandler(nil)).ServeHTTP(response, req)
 
 	return response
 }

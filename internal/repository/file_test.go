@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -13,12 +14,12 @@ func TestFileMetricsRepositoryFlushAndRestore(t *testing.T) {
 	filePath := filepath.Join(t.TempDir(), "metrics.json")
 	repository := &FileMetricsRepository{FilePath: filePath}
 	storage := NewMemStorage()
-	storage.SetGauge("Alloc", 42.5)
-	storage.SetGauge("ZeroGauge", 0)
-	storage.AddCounter("PollCount", 2)
-	storage.AddCounter("ZeroCounter", 0)
+	storage.SetGauge(context.Background(), "Alloc", 42.5)
+	storage.SetGauge(context.Background(), "ZeroGauge", 0)
+	storage.AddCounter(context.Background(), "PollCount", 2)
+	storage.AddCounter(context.Background(), "ZeroCounter", 0)
 
-	if err := repository.Flush(storage); err != nil {
+	if err := repository.Flush(context.Background(), storage); err != nil {
 		t.Fatalf("flush metrics: %v", err)
 	}
 
@@ -36,7 +37,7 @@ func TestFileMetricsRepositoryFlushAndRestore(t *testing.T) {
 	}
 
 	restoredStorage := NewMemStorage()
-	if err := repository.Restore(restoredStorage); err != nil {
+	if err := repository.Restore(context.Background(), restoredStorage); err != nil {
 		t.Fatalf("restore metrics: %v", err)
 	}
 
@@ -66,7 +67,7 @@ func TestFileMetricsRepositoryRestoreEmptyStorage(t *testing.T) {
 
 			repository := &FileMetricsRepository{FilePath: filePath}
 			storage := NewMemStorage()
-			if err := repository.Restore(storage); err != nil {
+			if err := repository.Restore(context.Background(), storage); err != nil {
 				t.Fatalf("restore metrics: %v", err)
 			}
 		})
@@ -76,7 +77,10 @@ func TestFileMetricsRepositoryRestoreEmptyStorage(t *testing.T) {
 func assertGauge(t *testing.T, storage *MemStorage, name string, want float64) {
 	t.Helper()
 
-	value, ok := storage.GetGauge(name)
+	value, ok, err := storage.GetGauge(context.Background(), name)
+	if err != nil {
+		t.Fatalf("get gauge %q: %v", name, err)
+	}
 	if !ok {
 		t.Fatalf("gauge %q not found", name)
 	}
@@ -88,7 +92,10 @@ func assertGauge(t *testing.T, storage *MemStorage, name string, want float64) {
 func assertCounter(t *testing.T, storage *MemStorage, name string, want int64) {
 	t.Helper()
 
-	value, ok := storage.GetCounter(name)
+	value, ok, err := storage.GetCounter(context.Background(), name)
+	if err != nil {
+		t.Fatalf("get counter %q: %v", name, err)
+	}
 	if !ok {
 		t.Fatalf("counter %q not found", name)
 	}

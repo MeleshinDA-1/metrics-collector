@@ -28,11 +28,11 @@ func withGzipCompression(next bodyEncoder) bodyEncoder {
 	}
 }
 
-func buildRequestBody(encode bodyEncoder) (io.Reader, error) {
+func buildRequestBody(encode bodyEncoder) ([]byte, error) {
 	var body bytes.Buffer
 	if err := encode(&body); err != nil {
 		return nil, err
 	}
 
-	return &body, nil
+	return body.Bytes(), nil
 }

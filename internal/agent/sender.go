@@ -1,26 +1,34 @@
 package agent
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/MeleshinDA-1/metrics-collector/internal/model"
+	"github.com/MeleshinDA-1/metrics-collector/internal/retry"
 )
 
 type metricsSender struct {
 	httpClient     *http.Client
-	updateURL      string
+	updatesURL     string
 	reportInterval time.Duration
+	retryPolicy    retry.Policy
 }
 
-func newMetricsSender(serverAddress string, reportInterval time.Duration) *metricsSender {
+func newMetricsSender(
+	serverAddress string,
+	reportInterval time.Duration,
+	retryPolicy retry.Policy,
+) *metricsSender {
 	return &metricsSender{
 		httpClient: &http.Client{
 			Timeout: requestTimeout,
 		},
-		updateURL:      normalizeServerAddress(serverAddress) + "/update",
+		updatesURL:     normalizeServerAddress(serverAddress) + "/updates/",
 		reportInterval: reportInterval,
+		retryPolicy:    retryPolicy,
 	}
 }
 
@@ -33,41 +41,46 @@ func (sender *metricsSender) run(store *metricsStore) {
 
 func (sender *metricsSender) sendMetrics(store *metricsStore) {
 	snapshot := store.snapshot()
-	metric := model.Metrics{MType: model.Gauge}
+
+	metrics := make([]model.Metrics, 0, len(snapshot.gauges)+len(snapshot.counters))
 	for metricName, metricValue := range snapshot.gauges {
-		metric.ID = metricName
-		metric.Value = &metricValue
-		err := sender.sendMetric(metric)
-		if err != nil {
-			slog.Error("failed to send gauge", "metric", metricName, "err", err)
-		}
+		value := metricValue
+		metrics = append(metrics, model.Metrics{
+			ID:    metricName,
+			MType: model.Gauge,
+			Value: &value,
+		})
+	}
+	for metricName, metricValue := range snapshot.counters {
+		delta := metricValue
+		metrics = append(metrics, model.Metrics{
+			ID:    metricName,
+			MType: model.Counter,
+			Delta: &delta,
+		})
 	}
 
-	sender.sendCounters(store, snapshot.counters)
-}
+	if len(metrics) == 0 {
+		return
+	}
 
-func (sender *metricsSender) sendCounters(store *metricsStore, counters map[string]int64) {
-	metric := model.Metrics{MType: model.Counter}
-	for metricName, metricValue := range counters {
-		metric.ID = metricName
-		metric.Delta = &metricValue
-		err := sender.sendMetric(metric)
-		if err != nil {
-			slog.Error("failed to send counter", "metric", metricName, "err", err)
-			continue
-		}
+	if err := sender.sendBatch(context.Background(), metrics); err != nil {
+		slog.Error("failed to send metrics batch", "count", len(metrics), "err", err)
+		return
+	}
 
+	for metricName, metricValue := range snapshot.counters {
 		store.acknowledgeCounter(metricName, metricValue)
 	}
 }
 
-func (sender *metricsSender) sendMetric(metric model.Metrics) error {
+func (sender *metricsSender) sendBatch(ctx context.Context, metrics []model.Metrics) error {
 	body, err := buildRequestBody(
-		withGzipCompression(encodeJSON(metric)),
+		withGzipCompression(encodeJSON(metrics)),
 	)
 	if err != nil {
 		return err
 	}
 
-	return sender.postUpdate(body)
+	return sender.post(ctx, sender.updatesURL, body)
 }

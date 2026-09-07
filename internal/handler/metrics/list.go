@@ -27,7 +27,11 @@ type metricView struct {
 }
 
 func (handler *MetricsHandler) ListMetrics(res http.ResponseWriter, req *http.Request) {
-	metrics := handler.storage.Snapshot()
+	metrics, err := handler.storage.Snapshot(req.Context())
+	if err != nil {
+		writeError(res, http.StatusInternalServerError, err)
+		return
+	}
 
 	data := struct {
 		Gauges   []metricView

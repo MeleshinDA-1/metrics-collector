@@ -2,7 +2,9 @@ package agent
 
 import (
 	"compress/gzip"
+	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -10,91 +12,43 @@ import (
 	"time"
 
 	"github.com/MeleshinDA-1/metrics-collector/internal/model"
+	"github.com/MeleshinDA-1/metrics-collector/internal/retry"
 )
 
-type capturedMetricRequest struct {
-	method          string
-	path            string
-	mediaType       string
-	contentEncoding string
-	metric          model.Metrics
-}
-
-func TestMetricsSenderSendMetric(t *testing.T) {
-	capturedRequests := make([]capturedMetricRequest, 0, 1)
-	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		metric, err := decodeGzipMetric(request)
-		if err != nil {
-			t.Errorf("read compressed metric: %v", err)
-			response.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		capturedRequests = append(capturedRequests, capturedMetricRequest{
-			method:          request.Method,
-			path:            request.URL.Path,
-			mediaType:       request.Header.Get("Content-Type"),
-			contentEncoding: request.Header.Get("Content-Encoding"),
-			metric:          metric,
-		})
-
-		response.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	sender := newMetricsSender(server.URL, time.Second)
-	metricValue := 42.5
-	metric := model.Metrics{
-		ID:    "Alloc",
-		MType: model.Gauge,
-		Value: &metricValue,
-	}
-
-	err := sender.sendMetric(metric)
-	if err != nil {
-		t.Fatalf("sendMetric returned error: %v", err)
-	}
-
-	if len(capturedRequests) != 1 {
-		t.Fatalf("requests count = %d, want %d", len(capturedRequests), 1)
-	}
-
-	want := capturedMetricRequest{
-		method:          http.MethodPost,
-		path:            "/update",
-		mediaType:       "application/json",
-		contentEncoding: "gzip",
-		metric:          metric,
-	}
-	if !reflect.DeepEqual(capturedRequests[0], want) {
-		t.Fatalf("request = %+v, want %+v", capturedRequests[0], want)
-	}
-}
-
-func TestMetricsSenderSendMetricReturnsErrorOnUnexpectedStatus(t *testing.T) {
+func TestMetricsSenderSendBatchReturnsErrorOnUnexpectedStatus(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		response.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
 
-	sender := newMetricsSender(server.URL, time.Second)
+	sender := newMetricsSender(server.URL, time.Second, retry.DefaultPolicy())
 
-	err := sender.sendMetric(model.Metrics{})
+	err := sender.sendBatch(context.Background(), []model.Metrics{{ID: "Alloc", MType: model.Gauge}})
 	if err == nil {
-		t.Fatal("sendMetric returned nil error, want non-nil error")
+		t.Fatal("sendBatch returned nil error, want non-nil error")
 	}
 }
 
 func TestMetricsSenderSendMetrics(t *testing.T) {
 	receivedMetrics := make([]model.Metrics, 0, 2)
+	requestCount := 0
+	requestMethod := ""
+	requestPath := ""
+	mediaType := ""
+	contentEncoding := ""
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
-		metric, err := decodeGzipMetric(request)
+		metrics, err := decodeGzipMetricsBatch(request.Body)
 		if err != nil {
-			t.Errorf("read compressed metric: %v", err)
+			t.Errorf("read compressed batch: %v", err)
 			response.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		receivedMetrics = append(receivedMetrics, metric)
+		requestCount++
+		requestMethod = request.Method
+		requestPath = request.URL.Path
+		mediaType = request.Header.Get("Content-Type")
+		contentEncoding = request.Header.Get("Content-Encoding")
+		receivedMetrics = append(receivedMetrics, metrics...)
 
 		response.WriteHeader(http.StatusOK)
 	}))
@@ -110,7 +64,7 @@ func TestMetricsSenderSendMetrics(t *testing.T) {
 		},
 	)
 
-	sender := newMetricsSender(server.URL, time.Second)
+	sender := newMetricsSender(server.URL, time.Second, retry.DefaultPolicy())
 	sender.sendMetrics(store)
 
 	gaugeValue := 42.5
@@ -135,21 +89,52 @@ func TestMetricsSenderSendMetrics(t *testing.T) {
 	if !reflect.DeepEqual(gotMetrics, wantMetrics) {
 		t.Fatalf("metrics = %v, want %v", gotMetrics, wantMetrics)
 	}
+	if requestCount != 1 {
+		t.Fatalf("requests count = %d, want 1", requestCount)
+	}
+	if requestMethod != http.MethodPost {
+		t.Fatalf("method = %q, want %q", requestMethod, http.MethodPost)
+	}
+	if requestPath != "/updates/" {
+		t.Fatalf("path = %q, want %q", requestPath, "/updates/")
+	}
+	if mediaType != "application/json" {
+		t.Fatalf("content type = %q, want %q", mediaType, "application/json")
+	}
+	if contentEncoding != "gzip" {
+		t.Fatalf("content encoding = %q, want %q", contentEncoding, "gzip")
+	}
 }
 
-func decodeGzipMetric(request *http.Request) (model.Metrics, error) {
-	reader, err := gzip.NewReader(request.Body)
+func TestMetricsSenderSkipsEmptyBatch(t *testing.T) {
+	requestCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		requestCount++
+		response.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	sender := newMetricsSender(server.URL, time.Second, retry.DefaultPolicy())
+	sender.sendMetrics(newMetricsStore())
+
+	if requestCount != 0 {
+		t.Fatalf("requests count = %d, want 0", requestCount)
+	}
+}
+
+func decodeGzipMetricsBatch(body io.Reader) ([]model.Metrics, error) {
+	reader, err := gzip.NewReader(body)
 	if err != nil {
-		return model.Metrics{}, err
+		return nil, err
 	}
 	defer reader.Close()
 
-	var metric model.Metrics
-	if err := json.NewDecoder(reader).Decode(&metric); err != nil {
-		return model.Metrics{}, err
+	var metrics []model.Metrics
+	if err := json.NewDecoder(reader).Decode(&metrics); err != nil {
+		return nil, err
 	}
 
-	return metric, nil
+	return metrics, nil
 }
 
 func TestMetricsSenderKeepsCounterAfterFailedSend(t *testing.T) {
@@ -166,7 +151,7 @@ func TestMetricsSenderKeepsCounterAfterFailedSend(t *testing.T) {
 		},
 	)
 
-	sender := newMetricsSender(server.URL, time.Second)
+	sender := newMetricsSender(server.URL, time.Second, retry.DefaultPolicy())
 	sender.sendMetrics(store)
 
 	assertMetricsSnapshot(t, store.snapshot(), metricsSnapshot{

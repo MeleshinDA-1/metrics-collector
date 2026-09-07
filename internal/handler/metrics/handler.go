@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/MeleshinDA-1/metrics-collector/internal/model"
@@ -10,11 +11,12 @@ import (
 type MetricsSnapshot = model.MetricsSnapshot
 
 type MetricsStorage interface {
-	SetGauge(name string, value float64)
-	AddCounter(name string, delta int64)
-	GetGauge(name string) (float64, bool)
-	GetCounter(name string) (int64, bool)
-	Snapshot() MetricsSnapshot
+	SetGauge(ctx context.Context, name string, value float64) error
+	AddCounter(ctx context.Context, name string, delta int64) (int64, error)
+	UpdateBatch(ctx context.Context, metrics []model.Metrics) error
+	GetGauge(ctx context.Context, name string) (float64, bool, error)
+	GetCounter(ctx context.Context, name string) (int64, bool, error)
+	Snapshot(ctx context.Context) (MetricsSnapshot, error)
 }
 
 type MetricsHandler struct {
@@ -29,4 +31,13 @@ func NewMetricsHandler(storage MetricsStorage) *MetricsHandler {
 
 func pathValue(req *http.Request, name string) string {
 	return mux.Vars(req)[name]
+}
+
+func writeError(res http.ResponseWriter, status int, err error) {
+	if status >= http.StatusInternalServerError {
+		http.Error(res, http.StatusText(status), status)
+		return
+	}
+
+	http.Error(res, err.Error(), status)
 }

@@ -10,17 +10,20 @@ import (
 )
 
 type Flusher struct {
-	memStorage        *repository.MemStorage
+	storage           repository.MetricsSnapshotProvider
 	metricsRepository repository.MetricsRepository
 }
 
-func NewFlusher(storage *repository.MemStorage, metricsRepository repository.MetricsRepository) *Flusher {
+func NewFlusher(
+	storage repository.MetricsSnapshotProvider,
+	metricsRepository repository.MetricsRepository,
+) *Flusher {
 	if metricsRepository == nil {
 		panic("metrics repository is required")
 	}
 
 	f := &Flusher{
-		memStorage:        storage,
+		storage:           storage,
 		metricsRepository: metricsRepository,
 	}
 	return f
@@ -40,7 +43,7 @@ func (f *Flusher) Start(
 	for {
 		select {
 		case <-ticker.C:
-			if err := f.metricsRepository.Flush(f.memStorage); err != nil {
+			if err := f.metricsRepository.Flush(ctx, f.storage); err != nil {
 				slog.Error("unable to save metrics", "error", err)
 			}
 

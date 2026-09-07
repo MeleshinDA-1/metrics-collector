@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,7 +17,7 @@ type FileMetricsRepository struct {
 	mutex    sync.Mutex
 }
 
-func (repo *FileMetricsRepository) Flush(storage MetricsSnapshotProvider) error {
+func (repo *FileMetricsRepository) Flush(ctx context.Context, storage MetricsSnapshotProvider) error {
 	repo.mutex.Lock()
 	defer repo.mutex.Unlock()
 
@@ -26,7 +27,11 @@ func (repo *FileMetricsRepository) Flush(storage MetricsSnapshotProvider) error 
 	}
 	defer file.Close()
 
-	snapshot := storage.Snapshot()
+	snapshot, err := storage.Snapshot(ctx)
+	if err != nil {
+		return err
+	}
+
 	metrics := make([]model.Metrics, 0, len(snapshot.Gauges)+len(snapshot.Counters))
 
 	for name, value := range snapshot.Gauges {
@@ -55,7 +60,7 @@ func (repo *FileMetricsRepository) Flush(storage MetricsSnapshotProvider) error 
 	return nil
 }
 
-func (repo *FileMetricsRepository) Restore(memStorage *MemStorage) error {
+func (repo *FileMetricsRepository) Restore(ctx context.Context, storage MetricsWriter) error {
 	file, err := os.Open(repo.FilePath)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
@@ -78,12 +83,16 @@ func (repo *FileMetricsRepository) Restore(memStorage *MemStorage) error {
 			if metric.Value == nil {
 				return fmt.Errorf("gauge %q has no value", metric.ID)
 			}
-			memStorage.SetGauge(metric.ID, *metric.Value)
+			if err := storage.SetGauge(ctx, metric.ID, *metric.Value); err != nil {
+				return err
+			}
 		case model.Counter:
 			if metric.Delta == nil {
 				return fmt.Errorf("counter %q has no delta", metric.ID)
 			}
-			memStorage.AddCounter(metric.ID, *metric.Delta)
+			if _, err := storage.AddCounter(ctx, metric.ID, *metric.Delta); err != nil {
+				return err
+			}
 		default:
 			return fmt.Errorf("unknown metric type %q", metric.MType)
 		}
