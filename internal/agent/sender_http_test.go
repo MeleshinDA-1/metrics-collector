@@ -82,7 +82,7 @@ func TestPostRebuildsBodyOnEveryAttempt(t *testing.T) {
 	}))
 	defer server.Close()
 
-	sender := newMetricsSender(server.URL, time.Second, "", retry.NewPolicy(time.Millisecond))
+	sender := newMetricsSender(server.URL, time.Second, 1, "", retry.NewPolicy(time.Millisecond))
 	metricValue := 42.5
 	batch := []model.Metrics{{ID: "Alloc", MType: model.Gauge, Value: &metricValue}}
 
@@ -153,7 +153,7 @@ func TestPostSignsBodyWhenKeyIsSet(t *testing.T) {
 			}))
 			defer server.Close()
 
-			sender := newMetricsSender(server.URL, time.Second, test.signingKey, retry.DefaultPolicy())
+			sender := newMetricsSender(server.URL, time.Second, 1, test.signingKey, retry.DefaultPolicy())
 			metricValue := 42.5
 			batch := []model.Metrics{{ID: "Alloc", MType: model.Gauge, Value: &metricValue}}
 

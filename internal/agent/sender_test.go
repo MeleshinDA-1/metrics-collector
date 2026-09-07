@@ -23,7 +23,7 @@ func TestMetricsSenderSendBatchReturnsErrorOnUnexpectedStatus(t *testing.T) {
 	}))
 	defer server.Close()
 
-	sender := newMetricsSender(server.URL, time.Second, "", retry.DefaultPolicy())
+	sender := newMetricsSender(server.URL, time.Second, 1, "", retry.DefaultPolicy())
 
 	err := sender.sendBatch(context.Background(), []model.Metrics{{ID: "Alloc", MType: model.Gauge}})
 	if err == nil {
@@ -31,7 +31,7 @@ func TestMetricsSenderSendBatchReturnsErrorOnUnexpectedStatus(t *testing.T) {
 	}
 }
 
-func TestMetricsSenderSendMetrics(t *testing.T) {
+func TestMetricsSenderReport(t *testing.T) {
 	var (
 		mutex           sync.Mutex
 		receivedMetrics []model.Metrics
@@ -51,13 +51,14 @@ func TestMetricsSenderSendMetrics(t *testing.T) {
 		}
 
 		mutex.Lock()
+		defer mutex.Unlock()
+
 		requestCount++
 		requestMethod = request.Method
 		requestPath = request.URL.Path
 		mediaType = request.Header.Get("Content-Type")
 		contentEncoding = request.Header.Get("Content-Encoding")
 		receivedMetrics = append(receivedMetrics, metrics...)
-		mutex.Unlock()
 
 		response.WriteHeader(http.StatusOK)
 	}))
@@ -73,8 +74,10 @@ func TestMetricsSenderSendMetrics(t *testing.T) {
 		},
 	)
 
-	sender := newMetricsSender(server.URL, time.Second, "", retry.DefaultPolicy())
-	sender.sendMetrics(store)
+	sender := newMetricsSender(server.URL, time.Second, 1, "", retry.DefaultPolicy())
+	if err := sender.report(context.Background(), store); err != nil {
+		t.Fatalf("report returned error: %v", err)
+	}
 
 	mutex.Lock()
 	defer mutex.Unlock()
@@ -127,12 +130,74 @@ func TestMetricsSenderSkipsEmptyBatch(t *testing.T) {
 	}))
 	defer server.Close()
 
-	sender := newMetricsSender(server.URL, time.Second, "", retry.DefaultPolicy())
-	sender.sendMetrics(newMetricsStore())
+	sender := newMetricsSender(server.URL, time.Second, 1, "", retry.DefaultPolicy())
+	if err := sender.report(context.Background(), newMetricsStore()); err != nil {
+		t.Fatalf("report returned error: %v", err)
+	}
 
 	if got := requestCount.Load(); got != 0 {
 		t.Fatalf("requests count = %d, want 0", got)
 	}
+}
+
+func TestMetricsSenderReportSendsCounterDeltaOnce(t *testing.T) {
+	var (
+		mutex    sync.Mutex
+		batches  [][]model.Metrics
+		received = func(metrics []model.Metrics) {
+			mutex.Lock()
+			defer mutex.Unlock()
+
+			batches = append(batches, metrics)
+		}
+	)
+
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		metrics, err := decodeGzipMetricsBatch(request.Body)
+		if err != nil {
+			t.Errorf("read compressed batch: %v", err)
+			response.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		received(metrics)
+		response.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	store := newMetricsStore()
+	store.update(map[string]float64{"Alloc": 1}, map[string]int64{"PollCount": 3})
+
+	sender := newMetricsSender(server.URL, time.Second, 1, "", retry.DefaultPolicy())
+	if err := sender.report(context.Background(), store); err != nil {
+		t.Fatalf("first report returned error: %v", err)
+	}
+	if err := sender.report(context.Background(), store); err != nil {
+		t.Fatalf("second report returned error: %v", err)
+	}
+
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	if len(batches) != 2 {
+		t.Fatalf("requests count = %d, want 2", len(batches))
+	}
+	if counterDelta(batches[0], "PollCount") != 3 {
+		t.Fatalf("first report delta = %d, want 3", counterDelta(batches[0], "PollCount"))
+	}
+	if counterDelta(batches[1], "PollCount") != 0 {
+		t.Fatalf("second report resent the delta: %d", counterDelta(batches[1], "PollCount"))
+	}
+}
+
+func counterDelta(metrics []model.Metrics, metricName string) int64 {
+	for _, metric := range metrics {
+		if metric.ID == metricName && metric.Delta != nil {
+			return *metric.Delta
+		}
+	}
+
+	return 0
 }
 
 func decodeGzipMetricsBatch(body io.Reader) ([]model.Metrics, error) {
@@ -150,7 +215,7 @@ func decodeGzipMetricsBatch(body io.Reader) ([]model.Metrics, error) {
 	return metrics, nil
 }
 
-func TestMetricsSenderKeepsCounterAfterFailedSend(t *testing.T) {
+func TestMetricsSenderKeepsCounterAfterFailedReport(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		response.WriteHeader(http.StatusInternalServerError)
 	}))
@@ -164,15 +229,97 @@ func TestMetricsSenderKeepsCounterAfterFailedSend(t *testing.T) {
 		},
 	)
 
-	sender := newMetricsSender(server.URL, time.Second, "", retry.DefaultPolicy())
-	sender.sendMetrics(store)
+	sender := newMetricsSender(server.URL, time.Second, 1, "", retry.DefaultPolicy())
+	if err := sender.report(context.Background(), store); err == nil {
+		t.Fatal("report returned nil error, want non-nil error")
+	}
 
-	assertMetricsSnapshot(t, store.snapshot(), metricsSnapshot{
+	assertMetricsSnapshot(t, storeState(store), metricsSnapshot{
 		gauges: map[string]float64{},
 		counters: map[string]int64{
 			"PollCount": 2,
 		},
 	})
+}
+
+func TestMetricsSenderRunRespectsRateLimit(t *testing.T) {
+	tests := []struct {
+		name      string
+		rateLimit int
+	}{
+		{
+			name:      "single worker serializes requests",
+			rateLimit: 1,
+		},
+		{
+			name:      "several workers report in parallel",
+			rateLimit: 3,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var inFlight, maxInFlight atomic.Int64
+
+			server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+				current := inFlight.Add(1)
+				for {
+					observed := maxInFlight.Load()
+					if current <= observed || maxInFlight.CompareAndSwap(observed, current) {
+						break
+					}
+				}
+
+				time.Sleep(20 * time.Millisecond)
+				inFlight.Add(-1)
+
+				response.WriteHeader(http.StatusOK)
+			}))
+			defer server.Close()
+
+			store := newMetricsStore()
+			store.update(map[string]float64{"Alloc": 1}, nil)
+
+			sender := newMetricsSender(server.URL, time.Millisecond, test.rateLimit, "", retry.DefaultPolicy())
+
+			ctx, cancel := context.WithCancel(context.Background())
+			stopped := make(chan struct{})
+			go func() {
+				defer close(stopped)
+
+				sender.run(ctx, store)
+			}()
+
+			time.Sleep(300 * time.Millisecond)
+			cancel()
+
+			select {
+			case <-stopped:
+			case <-time.After(5 * time.Second):
+				t.Fatal("run did not return after the context was cancelled")
+			}
+
+			got := maxInFlight.Load()
+			if got == 0 {
+				t.Fatal("no requests were sent")
+			}
+			if got > int64(test.rateLimit) {
+				t.Fatalf("requests in flight = %d, want at most %d", got, test.rateLimit)
+			}
+			if test.rateLimit > 1 && got < 2 {
+				t.Fatalf("requests in flight = %d, want the pool to report in parallel", got)
+			}
+		})
+	}
+}
+
+func TestNewMetricsSenderClampsRateLimit(t *testing.T) {
+	for _, rateLimit := range []int{-1, 0} {
+		sender := newMetricsSender("localhost:8080", time.Second, rateLimit, "", retry.DefaultPolicy())
+		if sender.rateLimit != 1 {
+			t.Fatalf("rate limit for %d = %d, want 1", rateLimit, sender.rateLimit)
+		}
+	}
 }
 
 func TestNormalizeServerAddress(t *testing.T) {
