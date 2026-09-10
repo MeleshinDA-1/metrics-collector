@@ -4,6 +4,7 @@ import "testing"
 
 func TestParseServerConfig(t *testing.T) {
 	t.Setenv("DATABASE_DSN", "")
+	t.Setenv("KEY", "")
 
 	tests := []struct {
 		name       string
@@ -28,6 +29,7 @@ func TestParseServerConfig(t *testing.T) {
 				"-f", "metrics.json",
 				"-r=false",
 				"-d", "postgres://flag-dsn",
+				"-k", "supersecret",
 			},
 			wantConfig: ServerConfig{
 				Address:                  "localhost:8888",
@@ -35,6 +37,7 @@ func TestParseServerConfig(t *testing.T) {
 				FileStoragePath:          "metrics.json",
 				Restore:                  false,
 				PostgresConnectionString: "postgres://flag-dsn",
+				Key:                      "supersecret",
 			},
 		},
 		{
@@ -70,6 +73,7 @@ func TestParseServerConfigEnvironmentOverridesFlags(t *testing.T) {
 	t.Setenv("FILE_STORAGE_PATH", "")
 	t.Setenv("RESTORE", "")
 	t.Setenv("DATABASE_DSN", "postgres://environment-dsn")
+	t.Setenv("KEY", "environment-key")
 
 	config, err := ParseConfig[ServerConfig]([]string{
 		"-a", "localhost:8888",
@@ -77,6 +81,7 @@ func TestParseServerConfigEnvironmentOverridesFlags(t *testing.T) {
 		"-f", "metrics.json",
 		"-r=false",
 		"-d", "postgres://flag-dsn",
+		"-k", "flag-key",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -88,6 +93,7 @@ func TestParseServerConfigEnvironmentOverridesFlags(t *testing.T) {
 		FileStoragePath:          "metrics.json",
 		Restore:                  false,
 		PostgresConnectionString: "postgres://environment-dsn",
+		Key:                      "environment-key",
 	}
 	if config != want {
 		t.Fatalf("config = %+v, want %+v", config, want)

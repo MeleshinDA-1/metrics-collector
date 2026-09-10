@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/MeleshinDA-1/metrics-collector/internal/hash"
 )
 
 const (
@@ -33,13 +35,13 @@ func isRetriableSendError(err error) bool {
 	return errors.As(err, &transportErr)
 }
 
-func (sender *metricsSender) post(ctx context.Context, url string, body []byte) error {
+func (sender *metricsSender) post(ctx context.Context, url string, body []byte, signature string) error {
 	return sender.retryPolicy.Do(ctx, func(ctx context.Context) error {
-		return sender.doPost(ctx, url, body)
+		return sender.doPost(ctx, url, body, signature)
 	}, isRetriableSendError)
 }
 
-func (sender *metricsSender) doPost(ctx context.Context, url string, body []byte) error {
+func (sender *metricsSender) doPost(ctx context.Context, url string, body []byte, signature string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -47,6 +49,9 @@ func (sender *metricsSender) doPost(ctx context.Context, url string, body []byte
 
 	req.Header.Set("Content-Type", jsonMediaType)
 	req.Header.Set("Content-Encoding", gzipEncoding)
+	if signature != "" {
+		req.Header.Set(hash.Header, signature)
+	}
 
 	resp, err := sender.httpClient.Do(req)
 	if err != nil {

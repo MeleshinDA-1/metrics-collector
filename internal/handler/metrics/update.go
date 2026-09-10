@@ -41,7 +41,7 @@ func (handler *MetricsHandler) updateMetrics(req *http.Request) (int, error) {
 			return http.StatusInternalServerError, err
 		}
 	default:
-		return http.StatusBadRequest, fmt.Errorf("Unknown metric type \"%s\"", metricType)
+		return http.StatusBadRequest, fmt.Errorf("unknown metric type \"%s\"", metricType)
 	}
 
 	return http.StatusOK, nil
@@ -83,7 +83,7 @@ func (handler *MetricsHandler) updateMetricsJSON(req *http.Request) (model.Metri
 		}
 		requestMetric.Delta = nil
 	default:
-		return model.Metrics{}, http.StatusBadRequest, fmt.Errorf("Unknown metric type \"%s\"", requestMetric.MType)
+		return model.Metrics{}, http.StatusBadRequest, fmt.Errorf("unknown metric type \"%s\"", requestMetric.MType)
 	}
 
 	return requestMetric, http.StatusOK, nil
@@ -119,7 +119,7 @@ func (handler *MetricsHandler) updateBatchMetricsJSON(req *http.Request) ([]mode
 				return nil, http.StatusBadRequest, fmt.Errorf("value is required for %q", metric.ID)
 			}
 		default:
-			return nil, http.StatusBadRequest, fmt.Errorf("Unknown metric type \"%s\"", metric.MType)
+			return nil, http.StatusBadRequest, fmt.Errorf("unknown metric type \"%s\"", metric.MType)
 		}
 	}
 

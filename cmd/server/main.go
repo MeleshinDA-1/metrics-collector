@@ -1,7 +1,10 @@
 package main
 
 import (
+	"context"
 	"log"
+	"os/signal"
+	"syscall"
 
 	"github.com/MeleshinDA-1/metrics-collector/internal/config"
 	"github.com/MeleshinDA-1/metrics-collector/internal/server"
@@ -13,7 +16,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if err := server.Run(serverConfig); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	if err := server.Run(ctx, serverConfig); err != nil {
 		log.Fatal(err)
 	}
 }
