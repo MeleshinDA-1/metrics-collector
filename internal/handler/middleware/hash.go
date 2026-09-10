@@ -64,7 +64,6 @@ func serveVerified(w http.ResponseWriter, r *http.Request, next http.Handler, si
 
 	signature := r.Header.Get(hash.Header)
 	if signature != "" && !hash.Equal(body, signingKey, signature) {
-		slog.Error("request signature mismatch", "signature", signature)
 		http.Error(w, "request signature mismatch", http.StatusBadRequest)
 		return
 	}

@@ -15,6 +15,14 @@ func encodeJSON(value any) bodyEncoder {
 	}
 }
 
+func writeRaw(data []byte) bodyEncoder {
+	return func(dst io.Writer) error {
+		_, err := dst.Write(data)
+
+		return err
+	}
+}
+
 func withGzipCompression(next bodyEncoder) bodyEncoder {
 	return func(dst io.Writer) error {
 		gz := gzip.NewWriter(dst)

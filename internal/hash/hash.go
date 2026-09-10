@@ -3,17 +3,17 @@ package hash
 import (
 	"crypto/hmac"
 	"crypto/sha256"
-	"encoding/hex"
+	"encoding/base64"
 )
 
 const Header = "HashSHA256"
 
 func Sign(data []byte, key string) string {
-	return hex.EncodeToString(sum(data, key))
+	return base64.StdEncoding.EncodeToString(sum(data, key))
 }
 
 func Equal(data []byte, key string, signature string) bool {
-	expected, err := hex.DecodeString(signature)
+	expected, err := base64.StdEncoding.DecodeString(signature)
 	if err != nil {
 		return false
 	}

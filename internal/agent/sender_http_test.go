@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
@@ -174,8 +175,20 @@ func TestPostSignsBodyWhenKeyIsSet(t *testing.T) {
 			if receivedSignature == "" {
 				t.Fatalf("request has no %s header", hash.Header)
 			}
-			if !hash.Equal(receivedBody, test.signingKey, receivedSignature) {
-				t.Fatalf("signature %q does not match the request body", receivedSignature)
+
+			gzipReader, err := gzip.NewReader(bytes.NewReader(receivedBody))
+			if err != nil {
+				t.Fatalf("read compressed request body: %v", err)
+			}
+			defer gzipReader.Close()
+
+			payload, err := io.ReadAll(gzipReader)
+			if err != nil {
+				t.Fatalf("decompress request body: %v", err)
+			}
+
+			if !hash.Equal(payload, test.signingKey, receivedSignature) {
+				t.Fatalf("signature %q does not match the uncompressed request body", receivedSignature)
 			}
 		})
 	}

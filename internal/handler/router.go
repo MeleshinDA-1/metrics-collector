@@ -31,8 +31,8 @@ func NewRouter(
 	registerPingRoutes(router, pingEndpoints)
 
 	return middleware.LoggingMiddleware(
-		middleware.SigningMiddleware(signingKey)(
-			middleware.CompressingMiddleware(router),
+		middleware.CompressingMiddleware(
+			middleware.SigningMiddleware(signingKey)(router),
 		),
 	)
 }

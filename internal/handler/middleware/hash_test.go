@@ -178,7 +178,7 @@ func TestSigningMiddlewareWithoutKeyIsDisabled(t *testing.T) {
 	}
 }
 
-func TestSigningMiddlewareSignsCompressedBody(t *testing.T) {
+func TestSigningMiddlewareSignsUncompressedBody(t *testing.T) {
 	metrics := []byte(`[{"id":"Alloc","type":"gauge","value":42}]`)
 
 	var compressed bytes.Buffer
@@ -189,26 +189,20 @@ func TestSigningMiddlewareSignsCompressedBody(t *testing.T) {
 	if err := gzipWriter.Close(); err != nil {
 		t.Fatalf("close gzip writer: %v", err)
 	}
-	body := compressed.Bytes()
 
-	request := httptest.NewRequest(http.MethodPost, "/updates/", bytes.NewReader(body))
+	request := httptest.NewRequest(http.MethodPost, "/updates/", bytes.NewReader(compressed.Bytes()))
 	request.Header.Set("Content-Encoding", "gzip")
 	request.Header.Set("Accept-Encoding", "gzip")
-	request.Header.Set(hash.Header, hash.Sign(body, signingTestKey))
+	request.Header.Set(hash.Header, hash.Sign(metrics, signingTestKey))
 	response := httptest.NewRecorder()
 
-	SigningMiddleware(signingTestKey)(CompressingMiddleware(echoHandler())).ServeHTTP(response, request)
+	CompressingMiddleware(SigningMiddleware(signingTestKey)(echoHandler())).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status code = %d, want %d", response.Code, http.StatusOK)
 	}
 	if encoding := response.Header().Get("Content-Encoding"); encoding != "gzip" {
 		t.Fatalf("content encoding = %q, want %q", encoding, "gzip")
-	}
-
-	signature := response.Header().Get(hash.Header)
-	if !hash.Equal(response.Body.Bytes(), signingTestKey, signature) {
-		t.Fatalf("response signature %q does not match the compressed response body", signature)
 	}
 
 	gzipReader, err := gzip.NewReader(bytes.NewReader(response.Body.Bytes()))
@@ -223,5 +217,10 @@ func TestSigningMiddlewareSignsCompressedBody(t *testing.T) {
 	}
 	if !bytes.Equal(decompressed, metrics) {
 		t.Fatalf("response body = %q, want %q", decompressed, metrics)
+	}
+
+	signature := response.Header().Get(hash.Header)
+	if !hash.Equal(decompressed, signingTestKey, signature) {
+		t.Fatalf("response signature %q does not match the uncompressed response body", signature)
 	}
 }

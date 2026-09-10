@@ -13,5 +13,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	agent.Run(agentConfig)
+	if err := agent.Run(agentConfig); err != nil {
+		log.Fatal(err)
+	}
 }

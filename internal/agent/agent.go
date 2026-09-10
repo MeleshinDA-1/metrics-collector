@@ -8,9 +8,10 @@ import (
 
 	"github.com/MeleshinDA-1/metrics-collector/internal/config"
 	"github.com/MeleshinDA-1/metrics-collector/internal/retry"
+	"golang.org/x/sync/errgroup"
 )
 
-func Run(agentConfig config.AgentConfig) {
+func Run(agentConfig config.AgentConfig) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -29,23 +30,21 @@ func Run(agentConfig config.AgentConfig) {
 		retry.DefaultPolicy(),
 	)
 
-	var running sync.WaitGroup
+	group, groupCtx := errgroup.WithContext(ctx)
 
-	running.Add(1)
-	go func() {
-		defer running.Done()
-
+	group.Go(func() error {
 		storeCollectedMetrics(store, collected)
-	}()
 
-	running.Add(1)
-	go func() {
-		defer running.Done()
+		return nil
+	})
 
-		sender.run(ctx, store)
-	}()
+	group.Go(func() error {
+		sender.run(groupCtx, store)
 
-	running.Wait()
+		return nil
+	})
+
+	return group.Wait()
 }
 
 func storeCollectedMetrics(store *metricsStore, collected <-chan metricsSnapshot) {

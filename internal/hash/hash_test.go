@@ -11,8 +11,8 @@ func TestSignIsStableAndKeyDependent(t *testing.T) {
 	if signature != Sign(data, testKey) {
 		t.Fatal("Sign returned different signatures for the same input")
 	}
-	if len(signature) != 64 {
-		t.Fatalf("signature length = %d, want %d", len(signature), 64)
+	if len(signature) != 44 {
+		t.Fatalf("signature length = %d, want %d", len(signature), 44)
 	}
 	if signature == Sign(data, "another key") {
 		t.Fatal("signatures computed with different keys are equal")
@@ -46,7 +46,7 @@ func TestEqual(t *testing.T) {
 			want:      false,
 		},
 		{
-			name:      "not a hex string",
+			name:      "not a base64 string",
 			signature: "not a signature",
 			want:      false,
 		},

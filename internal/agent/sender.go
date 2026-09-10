@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/MeleshinDA-1/metrics-collector/internal/hash"
 	"github.com/MeleshinDA-1/metrics-collector/internal/model"
 	"github.com/MeleshinDA-1/metrics-collector/internal/retry"
 )
@@ -142,12 +143,20 @@ func buildBatch(snapshot metricsSnapshot) []model.Metrics {
 }
 
 func (sender *metricsSender) sendBatch(ctx context.Context, metrics []model.Metrics) error {
-	body, err := buildRequestBody(
-		withGzipCompression(encodeJSON(metrics)),
-	)
+	payload, err := buildRequestBody(encodeJSON(metrics))
 	if err != nil {
 		return err
 	}
 
-	return sender.post(ctx, sender.updatesURL, body)
+	body, err := buildRequestBody(withGzipCompression(writeRaw(payload)))
+	if err != nil {
+		return err
+	}
+
+	var signature string
+	if sender.signingKey != "" {
+		signature = hash.Sign(payload, sender.signingKey)
+	}
+
+	return sender.post(ctx, sender.updatesURL, body, signature)
 }
