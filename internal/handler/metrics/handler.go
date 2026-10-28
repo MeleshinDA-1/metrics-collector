@@ -2,8 +2,12 @@ package metrics
 
 import (
 	"context"
+	"log/slog"
+	"net"
 	"net/http"
+	"time"
 
+	"github.com/MeleshinDA-1/metrics-collector/internal/audit"
 	"github.com/MeleshinDA-1/metrics-collector/internal/model"
 	"github.com/gorilla/mux"
 )
@@ -21,12 +25,34 @@ type MetricsStorage interface {
 
 type MetricsHandler struct {
 	storage MetricsStorage
+	audit   *audit.Publisher
 }
 
-func NewMetricsHandler(storage MetricsStorage) *MetricsHandler {
+func NewMetricsHandler(storage MetricsStorage, observers ...audit.Observer) *MetricsHandler {
 	return &MetricsHandler{
 		storage: storage,
+		audit:   audit.NewPublisher(observers...),
 	}
+}
+
+func (handler *MetricsHandler) auditMetrics(req *http.Request, names ...string) {
+	ip, _, err := net.SplitHostPort(req.RemoteAddr)
+	if err != nil {
+		ip = req.RemoteAddr
+	}
+	event := audit.Event{Timestamp: time.Now().Unix(), Metrics: names, IPAddress: ip}
+	// The metrics have already been stored; a disconnected client must not cancel audit.
+	if err := handler.audit.Publish(context.WithoutCancel(req.Context()), event); err != nil {
+		slog.Error("unable to deliver metrics audit", "metrics", names, "error", err)
+	}
+}
+
+func (handler *MetricsHandler) auditBatch(req *http.Request, metrics []model.Metrics) {
+	names := make([]string, len(metrics))
+	for i, metric := range metrics {
+		names[i] = metric.ID
+	}
+	handler.auditMetrics(req, names...)
 }
 
 func pathValue(req *http.Request, name string) string {

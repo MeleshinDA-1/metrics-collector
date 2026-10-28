@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/MeleshinDA-1/metrics-collector/internal/audit"
 	"github.com/MeleshinDA-1/metrics-collector/internal/config"
 	"github.com/MeleshinDA-1/metrics-collector/internal/handler"
 	"github.com/MeleshinDA-1/metrics-collector/internal/handler/health"
@@ -25,6 +26,23 @@ const shutdownTimeout = 5 * time.Second
 
 func Run(ctx context.Context, serverConfig config.ServerConfig) error {
 	ConfigureLogger(serverConfig)
+
+	var observers []audit.Observer
+	if serverConfig.AuditFile != "" {
+		observer, err := audit.NewFileObserver(serverConfig.AuditFile)
+		if err != nil {
+			return err
+		}
+		defer observer.Close()
+		observers = append(observers, observer)
+	}
+	if serverConfig.AuditURL != "" {
+		observer, err := audit.NewHTTPObserver(serverConfig.AuditURL)
+		if err != nil {
+			return err
+		}
+		observers = append(observers, observer)
+	}
 
 	var pinger health.DBPinger
 	var metricsEndpoints handler.MetricsEndpoints
@@ -49,11 +67,12 @@ func Run(ctx context.Context, serverConfig config.ServerConfig) error {
 		pinger = pool
 		metricsEndpoints = metrics.NewMetricsHandler(
 			repository.NewDBMetricStorage(pool, retry.DefaultPolicy()),
+			observers...,
 		)
 
 	default:
 		storage := repository.NewMemStorage()
-		metricsHandler := metrics.NewMetricsHandler(storage)
+		metricsHandler := metrics.NewMetricsHandler(storage, observers...)
 		metricsEndpoints = metricsHandler
 
 		if serverConfig.FileStoragePath != "" {
