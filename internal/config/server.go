@@ -9,6 +9,8 @@ type ServerConfig struct {
 	Restore                  bool   `env:"RESTORE" flag:"r,default=true" usage:"should load metrics data from storage"`
 	PostgresConnectionString string `env:"DATABASE_DSN" flag:"d,default=" usage:"database connection string"`
 	Key                      string `env:"KEY" flag:"k,default=" usage:"key used to verify request signatures"`
+	AuditFile                string `env:"AUDIT_FILE" flag:"audit-file,default=" usage:"audit JSONL file path (empty disables file audit)"`
+	AuditURL                 string `env:"AUDIT_URL" flag:"audit-url,default=" usage:"audit receiver URL (empty disables HTTP audit)"`
 }
 
 func ParseServerConfig() (ServerConfig, error) {

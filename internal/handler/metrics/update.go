@@ -15,6 +15,7 @@ func (handler *MetricsHandler) UpdateMetrics(res http.ResponseWriter, req *http.
 		return
 	}
 
+	handler.auditMetrics(req, pathValue(req, "metricName"))
 	res.WriteHeader(http.StatusOK)
 }
 
@@ -54,6 +55,7 @@ func (handler *MetricsHandler) UpdateMetricsJSON(res http.ResponseWriter, req *h
 		return
 	}
 
+	handler.auditMetrics(req, requestMetric.ID)
 	writeMetricsJSON(res, requestMetric)
 }
 
@@ -96,6 +98,7 @@ func (handler *MetricsHandler) UpdateBatchMetricsJSON(res http.ResponseWriter, r
 		return
 	}
 
+	handler.auditBatch(req, requestMetrics)
 	writeMetricsBatchJSON(res, requestMetrics)
 }
 
