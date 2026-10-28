@@ -1,0 +1,31 @@
+File: agent.test.exe
+Build ID: C:\Users\meles\AppData\Local\Temp\go-build3793935960\b001\agent.test.exe2026-10-28 09:09:34.5790854 +0300 MSK
+Type: alloc_space
+Time: 2026-10-28 09:04:39 MSK
+Showing nodes accounting for -1582295.95kB, 94.32% of 1677665.27kB total
+Dropped 115 nodes (cum <= 8388.33kB)
+      flat  flat%   sum%        cum   cum%
+-1296648kB 77.29% 77.29% -1576537.88kB 93.97%  compress/flate.NewWriter (inline)
+ -272136kB 16.22% 93.51%  -272136kB 16.22%  compress/flate.(*compressor).initDeflate (inline)
+-13506.75kB  0.81% 94.32% -13506.75kB  0.81%  compress/flate.(*huffmanEncoder).generate
+   -5.20kB 0.00031% 94.32% -795719.68kB 47.43%  github.com/MeleshinDA-1/metrics-collector/internal/handler.NewRouter.LoggingMiddleware.func4
+         0     0% 94.32% -13506.75kB  0.81%  compress/flate.(*Writer).Close (inline)
+         0     0% 94.32% -13506.75kB  0.81%  compress/flate.(*compressor).close
+         0     0% 94.32% -13506.75kB  0.81%  compress/flate.(*compressor).deflate
+         0     0% 94.32% -279889.88kB 16.68%  compress/flate.(*compressor).init
+         0     0% 94.32% -13506.75kB  0.81%  compress/flate.(*compressor).writeBlock
+         0     0% 94.32% -9004.50kB  0.54%  compress/flate.(*huffmanBitWriter).indexTokens
+         0     0% 94.32% -13506.75kB  0.81%  compress/flate.(*huffmanBitWriter).writeBlock
+         0     0% 94.32% -13506.75kB  0.81%  compress/gzip.(*Writer).Close
+         0     0% 94.32% -1576537.88kB 93.97%  compress/gzip.(*Writer).Write
+         0     0% 94.32% -1590629.20kB 94.81%  github.com/MeleshinDA-1/metrics-collector/internal/agent.BenchmarkMetricsPipeline
+         0     0% 94.32% -794773.12kB 47.37%  github.com/MeleshinDA-1/metrics-collector/internal/agent.BenchmarkMetricsPipeline.withGzipCompression.func4 (inline)
+         0     0% 94.32%  -787875kB 46.96%  github.com/MeleshinDA-1/metrics-collector/internal/agent.BenchmarkMetricsPipeline.writeRaw.func3 (inline)
+         0     0% 94.32% -794825.28kB 47.38%  github.com/MeleshinDA-1/metrics-collector/internal/agent.buildRequestBody (inline)
+         0     0% 94.32% -795714.48kB 47.43%  github.com/MeleshinDA-1/metrics-collector/internal/handler.NewRouter.CompressingMiddleware.func3
+         0     0% 94.32% -788957.73kB 47.03%  github.com/MeleshinDA-1/metrics-collector/internal/handler.NewRouter.NewRouter.SigningMiddleware.func1.func2
+         0     0% 94.32% -788662.88kB 47.01%  github.com/MeleshinDA-1/metrics-collector/internal/handler/middleware.(*compressingResponseWriter).Write
+         0     0% 94.32% -788805.52kB 47.02%  github.com/MeleshinDA-1/metrics-collector/internal/handler/middleware.(*signingResponseWriter).flush
+         0     0% 94.32% -795719.68kB 47.43%  net/http.HandlerFunc.ServeHTTP
+         0     0% 94.32% -1589834.50kB 94.76%  testing.(*B).launch
+         0     0% 94.32% -1590629.26kB 94.81%  testing.(*B).runN

@@ -42,3 +42,132 @@ git fetch template && git checkout template/v2 .github
 - **Clean Architecture**
 - **Hexagonal Architecture**
 - **Layered Architecture**
+
+## Инкремент 17: бенчмарки и память
+
+Бенчмарки находятся в `internal/agent/benchmark_test.go` и
+`internal/repository/benchmark_test.go`:
+
+- `BenchmarkBuildBatch` — подготовка 32 gauge и одного counter.
+- `BenchmarkEncodeBatch` — JSON и gzip для такого пакета.
+- `BenchmarkMetricsPipeline` — подготовка пакета агентом, gzip и HMAC, обработка
+  `POST /updates/` полным серверным роутером, сжатый подписанный ответ, затем
+  чтение `PollCount`. Счётчик проверяется после каждого обновления; после нагрузки
+  проверяются сохранённые метрики, gzip и подпись ответа.
+- `BenchmarkMemStorage` — обновление пакета, чтение и снимок хранилища с 32 и
+  1024 метриками.
+
+Данные непустые: имена runtime/system-метрик, ненулевые значения и накопительный
+`PollCount`. Набор имён фиксирован, поэтому хранилище не растёт с числом итераций.
+В `BenchmarkMetricsPipeline` агент и HTTP-роутер работают в одном процессе без
+сокетов; обычные информационные логи отключены, аудит и файловое/SQL-хранилище
+не включены. Это измерение затрат Go-кода, а не сетевого throughput или RSS
+работающего сервера. В отдельных процессах агент и сервер имеют отдельные пулы.
+
+### Что показал профиль
+
+Исходная версия с бенчмарками зафиксирована коммитом `953c98d` до изменения
+рабочего кода. Профиль `profiles/base.pprof` снят на ней. `top`, `list` и `peek`
+показали, что `compress/flate.NewWriter` вместе с вызываемыми функциями отвечает
+за **94,02% выделенных байтов**: при каждой отправке агента и сжатии ответа
+создавался новый компрессор.
+
+Добавлен `internal/compression.Writer`: gzip-компрессоры переиспользуются через
+`sync.Pool`. Каждый запрос владеет своим экземпляром до `Close`; после завершения
+сжатия `Reset(io.Discard)` убирает ссылку на прежнего получателя и сбрасывает
+состояние, в том числе при ошибке записи. Пул может быть очищен сборщиком мусора;
+корректность не зависит от попадания в кеш. Формат gzip, уровень сжатия,
+подписываемые данные и повторная отправка сохранённого тела не изменены.
+
+### Результат измерений
+
+Окружение: Go 1.26.2, Windows/amd64, AMD Ryzen 9 9950X3D. По пять прогонов
+на 1000 операций, `-cpu=1`; ниже медианы. Исходные результаты сохранены в
+[`profiles/base-bench.txt`](profiles/base-bench.txt) и
+[`profiles/result-bench.txt`](profiles/result-bench.txt).
+
+| Бенчмарк | нс/операцию до → после | байт/операцию до → после | аллокаций/операцию до → после |
+| --- | ---: | ---: | ---: |
+| BuildBatch | 577,7 → 600,9 | 2 568 → 2 568 | 34 → 34 |
+| EncodeBatch | 59 399 → 19 842 | 816 645 → 2 752 | 24 → 8 |
+| MetricsPipeline | 169 618 → 90 866 | 1 715 893 → 87 918 | 339 → 304 |
+
+На полном пути обработки выделение памяти уменьшилось на **94,88%**, медианное
+время — на **46,43%**. Это результаты указанного локального сценария; пять
+прогонов не доказывают такое же ускорение под произвольной production-нагрузкой.
+Хранилище не менялось: обновление/чтение по-прежнему выделяют 0 B/op; снимки
+32 и 1024 метрик — 1 928 и 54 704 B/op соответственно.
+
+Для профилей использована та же нагрузка: один отдельный запуск, 1000 операций,
+`-cpu=1`, `-memprofilerate=1`. Профиль включает также подготовку и пробный запуск
+benchmark harness, одинаковые в обеих версиях. Время из `*-run.txt` нельзя
+смешивать с таблицей: запись каждой аллокации замедляет выполнение.
+
+Суммарный `alloc_space` уменьшился примерно с **1,60 GiB до 85,00 MiB**.
+Удерживаемая память `inuse_space` после нагрузки, напротив, выросла с
+**41,49 KiB до 836,35 KiB** из-за сохранённого компрессора. Это осознанный обмен
+небольшого кеша на сокращение повторных аллокаций; уменьшение RSS не заявляется.
+Отчёты сохранены в `profiles/base-inuse.txt` и `profiles/result-inuse.txt`.
+
+Команда сравнения из задания:
+
+```sh
+go tool pprof -top '-diff_base=profiles/base.pprof' profiles/result.pprof
+```
+
+Фрагмент фактического вывода (`Type: alloc_space`; полный вывод —
+[`profiles/diff.txt`](profiles/diff.txt)):
+
+```text
+Showing nodes accounting for -1582295.95kB, 94.32% of 1677665.27kB total
+      flat  flat%   sum%        cum   cum%
+-1296648kB 77.29% 77.29% -1576537.88kB 93.97%  compress/flate.NewWriter (inline)
+ -272136kB 16.22% 93.51%  -272136kB 16.22%  compress/flate.(*compressor).initDeflate (inline)
+-13506.75kB  0.81% 94.32% -13506.75kB  0.81%  compress/flate.(*huffmanEncoder).generate
+```
+
+### Как воспроизвести
+
+Запуск бенчмарков без профилирования:
+
+```sh
+go test ./internal/agent ./internal/repository '-run=^$' '-bench=Benchmark' -benchmem -benchtime=1000x -count=5 -cpu=1
+```
+
+Для исходного профиля используйте отдельный чистый checkout коммита `953c98d`,
+для итогового — `iter17`. В обоих checkout создайте каталог `profiles`.
+Первая команда ниже выполняется на исходной версии, вторая — на итоговой.
+Одинаковое число операций необходимо для корректного сравнения суммарных
+аллокаций; нормализация профилей не используется.
+
+```sh
+go test ./internal/agent '-run=^$' '-bench=^BenchmarkMetricsPipeline$' -benchtime=1000x -cpu=1 -memprofilerate=1 '-memprofile=profiles/base.pprof'
+go test ./internal/agent '-run=^$' '-bench=^BenchmarkMetricsPipeline$' -benchtime=1000x -cpu=1 -memprofilerate=1 '-memprofile=profiles/result.pprof'
+```
+
+Скопируйте оба профиля в один каталог для сравнения. Кавычки вокруг параметров
+с путями и регулярными выражениями нужны также при запуске из PowerShell.
+Анализировать сохранённые профили можно без повторной нагрузки:
+
+```sh
+go tool pprof -top profiles/base.pprof
+go tool pprof -alloc_space '-list=compress/flate.NewWriter' profiles/base.pprof
+go tool pprof -alloc_space '-peek=compress/gzip' profiles/base.pprof
+go tool pprof -top -alloc_objects '-diff_base=profiles/base.pprof' profiles/result.pprof
+go tool pprof -top -inuse_space profiles/result.pprof
+go tool pprof -web profiles/base.pprof
+go tool pprof '-http=127.0.0.1:18017' -no_browser profiles/base.pprof
+```
+
+Для `-web` требуется Graphviz (`dot` в PATH). На машине измерения его нет:
+ошибка команды сохранена в `profiles/base-web.txt`. Доступен встроенный веб-
+интерфейс pprof: `/ui/flamegraph` успешно открылся и содержал стек
+`BenchmarkMetricsPipeline → gzip → flate`. Графы в формате DOT сохранены в
+`profiles/base.dot` и `profiles/result.dot`.
+
+Функциональные проверки охватывают параллельное сжатие, пустые/большие тела,
+повторное использование после GC, ошибки кодирования/записи, gzip и подписи
+ответов. Дополнительно проверены собранные агент и сервер по HTTP: два цикла
+работы с перезапуском агента, `PollCount` 20 → 41, 20 событий аудита,
+распаковка ответа и совпадение HMAC. В CI выполняются автотесты предыдущих
+инкрементов, `go test -race ./...` и короткий запуск всех новых бенчмарков.

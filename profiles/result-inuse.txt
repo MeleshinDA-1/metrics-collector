@@ -1,0 +1,18 @@
+File: agent.test.exe
+Build ID: C:\Users\meles\AppData\Local\Temp\go-build3793935960\b001\agent.test.exe2026-10-28 09:09:34.5790854 +0300 MSK
+Type: inuse_space
+Time: 2026-10-28 09:09:36 MSK
+Showing nodes accounting for 818.31kB, 97.84% of 836.35kB total
+Dropped 193 nodes (cum <= 4.18kB)
+Showing top 10 nodes out of 42
+      flat  flat%   sum%        cum   cum%
+     648kB 77.48% 77.48%   787.88kB 94.20%  compress/flate.NewWriter
+     136kB 16.26% 93.74%      136kB 16.26%  compress/flate.(*compressor).initDeflate (inline)
+   19.56kB  2.34% 96.08%    19.56kB  2.34%  runtime.mallocgc
+       8kB  0.96% 97.04%        8kB  0.96%  hash/crc32.slicingMakeTable
+    6.75kB  0.81% 97.84%     6.75kB  0.81%  compress/flate.(*huffmanEncoder).generate
+         0     0% 97.84%     6.75kB  0.81%  compress/flate.(*Writer).Close
+         0     0% 97.84%     6.75kB  0.81%  compress/flate.(*compressor).close
+         0     0% 97.84%     6.75kB  0.81%  compress/flate.(*compressor).deflate
+         0     0% 97.84%   139.88kB 16.72%  compress/flate.(*compressor).init
+         0     0% 97.84%     6.75kB  0.81%  compress/flate.(*compressor).writeBlock

@@ -2,9 +2,10 @@ package agent
 
 import (
 	"bytes"
-	"compress/gzip"
 	"encoding/json"
 	"io"
+
+	"github.com/MeleshinDA-1/metrics-collector/internal/compression"
 )
 
 type bodyEncoder func(io.Writer) error
@@ -25,7 +26,7 @@ func writeRaw(data []byte) bodyEncoder {
 
 func withGzipCompression(next bodyEncoder) bodyEncoder {
 	return func(dst io.Writer) error {
-		gz := gzip.NewWriter(dst)
+		gz := compression.NewWriter(dst)
 
 		if err := next(gz); err != nil {
 			_ = gz.Close()

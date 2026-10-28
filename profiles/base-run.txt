@@ -1,0 +1,7 @@
+goos: windows
+goarch: amd64
+pkg: github.com/MeleshinDA-1/metrics-collector/internal/agent
+cpu: AMD Ryzen 9 9950X3D 16-Core Processor
+BenchmarkMetricsPipeline 	    1000	    639039 ns/op	 1715910 B/op	     339 allocs/op
+PASS
+ok  	github.com/MeleshinDA-1/metrics-collector/internal/agent	1.628s
