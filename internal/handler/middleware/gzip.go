@@ -5,11 +5,13 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+
+	"github.com/MeleshinDA-1/metrics-collector/internal/compression"
 )
 
 type compressingResponseWriter struct {
 	http.ResponseWriter
-	gzipWriter *gzip.Writer
+	gzipWriter *compression.Writer
 }
 
 func (w *compressingResponseWriter) enableGzip() {
@@ -19,7 +21,7 @@ func (w *compressingResponseWriter) enableGzip() {
 
 	w.Header().Set("Content-Encoding", "gzip")
 	w.Header().Del("Content-Length")
-	w.gzipWriter = gzip.NewWriter(w.ResponseWriter)
+	w.gzipWriter = compression.NewWriter(w.ResponseWriter)
 }
 
 func (w *compressingResponseWriter) Write(data []byte) (int, error) {
