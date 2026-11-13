@@ -1,3 +1,4 @@
+// Пакет agent собирает метрики Go и системы и отправляет пакетами по HTTP.
 package agent
 
 import (
@@ -11,6 +12,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// Run запускает сборщики и отправитель, ожидает остановки по SIGINT или SIGTERM.
 func Run(agentConfig config.AgentConfig) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()

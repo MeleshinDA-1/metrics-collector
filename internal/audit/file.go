@@ -8,6 +8,8 @@ import (
 	"sync"
 )
 
+// FileObserver дописывает аудит в JSONL с последовательной записью.
+// Создаётся через NewFileObserver и закрывается после последнего уведомления.
 type FileObserver struct {
 	mu   sync.Mutex
 	file *os.File

@@ -52,6 +52,9 @@ func (w *compressingResponseWriter) Close() error {
 	return w.gzipWriter.Close()
 }
 
+// CompressingMiddleware распаковывает gzip-запросы и сжимает JSON/HTML-ответы,
+// если Accept-Encoding содержит gzip. Неверный заголовок gzip даёт 400 до next.
+// Размещается снаружи SigningMiddleware для подписи несжатых данных.
 func CompressingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.Header.Get("Content-Encoding"), "gzip") {

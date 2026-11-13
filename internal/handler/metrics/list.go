@@ -26,6 +26,8 @@ type metricView struct {
 	Value string
 }
 
+// ListMetrics возвращает HTML-список всех gauge и counter по GET /.
+// Имена экранируются; порядок внутри типа не определён. Ошибка снимка даёт 500.
 func (handler *MetricsHandler) ListMetrics(res http.ResponseWriter, req *http.Request) {
 	metrics, err := handler.storage.Snapshot(req.Context())
 	if err != nil {

@@ -9,6 +9,9 @@ import (
 	"github.com/MeleshinDA-1/metrics-collector/internal/model"
 )
 
+// UpdateMetrics обрабатывает POST /update/{metricType}/{metricName}/{metricValue}.
+// Заменяет gauge или прибавляет delta к counter; возвращает 200 с пустым телом.
+// Неверные типы и значения дают 400, ошибки хранилища дают 500. Переменные пути задаёт роутер.
 func (handler *MetricsHandler) UpdateMetrics(res http.ResponseWriter, req *http.Request) {
 	if status, err := handler.updateMetrics(req); err != nil {
 		writeError(res, status, err)
@@ -48,6 +51,10 @@ func (handler *MetricsHandler) updateMetrics(req *http.Request) (int, error) {
 	return http.StatusOK, nil
 }
 
+// UpdateMetricsJSON обрабатывает POST /update/ с JSON model.Metrics.
+// Counter требует delta, gauge требует value, включая нулевые значения.
+// Возвращает 200 с сохранённым gauge или итогом counter в JSON.
+// Неверный JSON, тип или отсутствие значения дают 400; сбой хранилища даёт 500.
 func (handler *MetricsHandler) UpdateMetricsJSON(res http.ResponseWriter, req *http.Request) {
 	requestMetric, status, err := handler.updateMetricsJSON(req)
 	if err != nil {
@@ -91,6 +98,9 @@ func (handler *MetricsHandler) updateMetricsJSON(req *http.Request) (model.Metri
 	return requestMetric, http.StatusOK, nil
 }
 
+// UpdateBatchMetricsJSON принимает непустой JSON-массив метрик по POST /updates/.
+// Проверяет весь пакет до записи; возвращает 200 с исходным массивом, содержащим приращения counter.
+// Неверный пакет даёт 400, сбой хранилища даёт 500.
 func (handler *MetricsHandler) UpdateBatchMetricsJSON(res http.ResponseWriter, req *http.Request) {
 	requestMetrics, status, err := handler.updateBatchMetricsJSON(req)
 	if err != nil {

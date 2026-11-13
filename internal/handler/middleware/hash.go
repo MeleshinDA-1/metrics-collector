@@ -33,6 +33,10 @@ func (w *signingResponseWriter) flush() {
 	}
 }
 
+// SigningMiddleware проверяет HashSHA256 запроса и подписывает все ответы HMAC-SHA256 в base64.
+// Запросы без подписи принимаются; неверная подпись или ошибка чтения тела дают 400.
+// Пустой signingKey отключает обработчик. Размещается внутри gzip-обработчика
+// для подписи несжатых данных.
 func SigningMiddleware(signingKey string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		if signingKey == "" {

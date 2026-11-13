@@ -1,3 +1,4 @@
+// Пакет server управляет HTTP-сервером, хранилищем и аудитом.
 package server
 
 import (
@@ -24,6 +25,10 @@ import (
 
 const shutdownTimeout = 5 * time.Second
 
+// Run инициализирует хранилище и аудит, обслуживает HTTP до отмены ctx или ошибки.
+// DSN PostgreSQL приоритетнее файлового хранения и требует миграций в ./migrations.
+// Штатная остановка ждёт завершения запросов до пяти секунд, затем сохраняет снимок,
+// если файловое хранение включено.
 func Run(ctx context.Context, serverConfig config.ServerConfig) error {
 	ConfigureLogger(serverConfig)
 

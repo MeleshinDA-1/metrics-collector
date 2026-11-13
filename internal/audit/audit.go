@@ -1,3 +1,4 @@
+// Пакет audit передаёт события успешного обновления метрик файловым и HTTP-наблюдателям.
 package audit
 
 import (
@@ -6,18 +7,24 @@ import (
 	"fmt"
 )
 
+// Event описывает успешный запрос обновления, включая пакетный.
 type Event struct {
-	Timestamp int64    `json:"ts"`
-	Metrics   []string `json:"metrics"`
-	IPAddress string   `json:"ip_address"`
+	// Timestamp содержит время события в секундах Unix.
+	Timestamp int64 `json:"ts"`
+	// Metrics содержит имена обновлённых метрик в порядке запроса, включая повторы.
+	Metrics []string `json:"metrics"`
+	// IPAddress содержит RemoteAddr клиента без порта, если адрес разобран.
+	IPAddress string `json:"ip_address"`
 }
 
+// Observer получает события аудита. При параллельных запросах должен поддерживать
+// одновременные Notify. Изменять Metrics события нельзя.
 type Observer interface {
 	Notify(context.Context, Event) error
 }
 
-// Publisher notifies every observer, even if another observer fails.
-// Its subscriptions are fixed at startup, so concurrent requests can publish safely.
+// Publisher уведомляет всех наблюдателей, несмотря на ошибки.
+// Подписки неизменны; параллельная работа требует потокобезопасных наблюдателей.
 type Publisher struct {
 	observers []Observer
 }
@@ -26,6 +33,7 @@ func NewPublisher(observers ...Observer) *Publisher {
 	return &Publisher{observers: append([]Observer(nil), observers...)}
 }
 
+// Publish синхронно уведомляет всех наблюдателей в порядке подписки и объединяет ошибки.
 func (p *Publisher) Publish(ctx context.Context, event Event) error {
 	var errs []error
 	for _, observer := range p.observers {

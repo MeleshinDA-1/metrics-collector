@@ -10,11 +10,15 @@ import (
 	"time"
 )
 
+// HTTPObserver отправляет события JSON-запросами POST.
+// Поддерживает параллельные уведомления.
 type HTTPObserver struct {
 	url    string
 	client *http.Client
 }
 
+// NewHTTPObserver требует абсолютный HTTP(S) URL. Тайм-аут составляет две секунды.
+// Перенаправления и повторы отключены.
 func NewHTTPObserver(address string) (*HTTPObserver, error) {
 	u, err := url.Parse(address)
 	if err != nil || u.Hostname() == "" || (u.Scheme != "http" && u.Scheme != "https") {

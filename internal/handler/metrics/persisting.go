@@ -6,11 +6,14 @@ import (
 	"github.com/MeleshinDA-1/metrics-collector/internal/repository"
 )
 
+// PersistingMetricsHandler сохраняет снимок после успешного обновления, до аудита и ответа.
+// Чтение выполняет MetricsHandler. Ошибка сохранения даёт 500 без отката обновления.
 type PersistingMetricsHandler struct {
 	*MetricsHandler
 	metricsRepository repository.MetricsRepository
 }
 
+// NewPersistingMetricsHandler требует ненулевые обработчик и репозиторий снимков.
 func NewPersistingMetricsHandler(
 	metricsHandler *MetricsHandler,
 	metricsRepository repository.MetricsRepository,

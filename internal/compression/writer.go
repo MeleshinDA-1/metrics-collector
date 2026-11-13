@@ -10,8 +10,7 @@ var writers = sync.Pool{
 	New: func() any { return gzip.NewWriter(io.Discard) },
 }
 
-// Writer owns a reusable gzip compressor until Close. Like gzip.Writer, a single
-// Writer must not be used concurrently; separate Writers can be used in parallel.
+// Writer владеет gzip-компрессором до Close. Параллельно работают только разные экземпляры.
 type Writer struct {
 	gzip *gzip.Writer
 }
@@ -29,6 +28,8 @@ func (w *Writer) Write(data []byte) (int, error) {
 	return w.gzip.Write(data)
 }
 
+// Close завершает поток, освобождает компрессор и ссылку на получателя даже при ошибке.
+// Получатель не закрывается. Повторный вызов возвращает nil.
 func (w *Writer) Close() error {
 	if w.gzip == nil {
 		return nil
@@ -36,8 +37,7 @@ func (w *Writer) Close() error {
 	writer := w.gzip
 	w.gzip = nil
 	err := writer.Close()
-	// Drop the previous destination even after an error, so idle compressors do
-	// not retain request/response buffers. Reset also clears gzip headers/errors.
+	// Reset удаляет ссылку на получателя и сбрасывает состояние gzip.
 	writer.Reset(io.Discard)
 	writers.Put(writer)
 	return err

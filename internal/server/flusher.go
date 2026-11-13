@@ -9,6 +9,7 @@ import (
 	"github.com/MeleshinDA-1/metrics-collector/internal/repository"
 )
 
+// Flusher периодически сохраняет снимки метрик.
 type Flusher struct {
 	storage           repository.MetricsSnapshotProvider
 	metricsRepository repository.MetricsRepository
@@ -29,6 +30,8 @@ func NewFlusher(
 	return f
 }
 
+// Start сохраняет снимок каждые StoreInterval секунд до отмены ctx.
+// Ошибки журналируются, запись продолжается. При интервале <= 0 возвращается сразу.
 func (f *Flusher) Start(
 	ctx context.Context,
 	serverConfig config.ServerConfig,
