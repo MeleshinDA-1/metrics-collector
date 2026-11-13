@@ -4,6 +4,9 @@ import "testing"
 
 func TestParseServerConfig(t *testing.T) {
 	t.Setenv("DATABASE_DSN", "")
+	t.Setenv("KEY", "")
+	t.Setenv("AUDIT_FILE", "")
+	t.Setenv("AUDIT_URL", "")
 
 	tests := []struct {
 		name       string
@@ -28,6 +31,9 @@ func TestParseServerConfig(t *testing.T) {
 				"-f", "metrics.json",
 				"-r=false",
 				"-d", "postgres://flag-dsn",
+				"-k", "supersecret",
+				"--audit-file", "audit.jsonl",
+				"--audit-url", "http://localhost:9000/audit",
 			},
 			wantConfig: ServerConfig{
 				Address:                  "localhost:8888",
@@ -35,6 +41,9 @@ func TestParseServerConfig(t *testing.T) {
 				FileStoragePath:          "metrics.json",
 				Restore:                  false,
 				PostgresConnectionString: "postgres://flag-dsn",
+				Key:                      "supersecret",
+				AuditFile:                "audit.jsonl",
+				AuditURL:                 "http://localhost:9000/audit",
 			},
 		},
 		{
@@ -70,6 +79,9 @@ func TestParseServerConfigEnvironmentOverridesFlags(t *testing.T) {
 	t.Setenv("FILE_STORAGE_PATH", "")
 	t.Setenv("RESTORE", "")
 	t.Setenv("DATABASE_DSN", "postgres://environment-dsn")
+	t.Setenv("KEY", "environment-key")
+	t.Setenv("AUDIT_FILE", "env-audit.jsonl")
+	t.Setenv("AUDIT_URL", "http://localhost:9001/audit")
 
 	config, err := ParseConfig[ServerConfig]([]string{
 		"-a", "localhost:8888",
@@ -77,6 +89,9 @@ func TestParseServerConfigEnvironmentOverridesFlags(t *testing.T) {
 		"-f", "metrics.json",
 		"-r=false",
 		"-d", "postgres://flag-dsn",
+		"-k", "flag-key",
+		"--audit-file", "flag-audit.jsonl",
+		"--audit-url", "http://localhost:9000/audit",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -88,6 +103,9 @@ func TestParseServerConfigEnvironmentOverridesFlags(t *testing.T) {
 		FileStoragePath:          "metrics.json",
 		Restore:                  false,
 		PostgresConnectionString: "postgres://environment-dsn",
+		Key:                      "environment-key",
+		AuditFile:                "env-audit.jsonl",
+		AuditURL:                 "http://localhost:9001/audit",
 	}
 	if config != want {
 		t.Fatalf("config = %+v, want %+v", config, want)

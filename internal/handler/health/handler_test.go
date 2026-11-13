@@ -49,7 +49,7 @@ func TestPingDB(t *testing.T) {
 			request := httptest.NewRequest(http.MethodGet, "/ping", nil)
 			response := httptest.NewRecorder()
 
-			handler.NewRouter(metricsHandler, NewPingHandler(test.pinger)).ServeHTTP(response, request)
+			handler.NewRouter(metricsHandler, NewPingHandler(test.pinger), "").ServeHTTP(response, request)
 
 			if response.Code != test.wantStatusCode {
 				t.Fatalf("status = %d, want %d", response.Code, test.wantStatusCode)

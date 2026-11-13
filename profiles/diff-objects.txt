@@ -1,0 +1,18 @@
+File: agent.test.exe
+Build ID: C:\Users\meles\AppData\Local\Temp\go-build3793935960\b001\agent.test.exe2026-10-28 09:09:34.5790854 +0300 MSK
+Type: alloc_objects
+Time: 2026-10-28 09:04:39 MSK
+Showing nodes accounting for -37326, 13.30% of 280643 total
+Dropped 61 nodes (cum <= 1403)
+Showing top 10 nodes out of 68
+      flat  flat%   sum%        cum   cum%
+    -12006  4.28%  4.28%     -12006  4.28%  compress/flate.newHuffmanEncoder (inline)
+     -8004  2.85%  7.13%     -20010  7.13%  compress/flate.newHuffmanBitWriter (inline)
+     -6003  2.14%  9.27%      -6003  2.14%  compress/flate.(*huffmanEncoder).generate
+     -4002  1.43% 10.70%      -4002  1.43%  compress/flate.(*compressor).initDeflate (inline)
+     -3727  1.33% 12.02%      -3727  1.33%  sync.(*Pool).pinSlow
+      2002  0.71% 11.31%       2083  0.74%  github.com/MeleshinDA-1/metrics-collector/internal/compression.NewWriter
+     -2001  0.71% 12.02%     -26013  9.27%  compress/flate.NewWriter (inline)
+     -2001  0.71% 12.74%      -2001  0.71%  compress/gzip.NewWriterLevel
+     -1251  0.45% 13.18%      -1251  0.45%  reflect.unsafe_New
+      -333  0.12% 13.30%     -19209  6.84%  github.com/MeleshinDA-1/metrics-collector/internal/handler.NewRouter.LoggingMiddleware.func4

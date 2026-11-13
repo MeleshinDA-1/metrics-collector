@@ -1,3 +1,4 @@
+// Пакет middleware добавляет журналирование запросов, gzip и HMAC-подписи к HTTP-обработчикам.
 package middleware
 
 import (
@@ -9,6 +10,8 @@ import (
 	"time"
 )
 
+// ResponseInterceptor передаёт записи, учитывая статус и размер для LoggingMiddleware.
+// Реализует http.ResponseWriter без дополнительных интерфейсов.
 type ResponseInterceptor struct {
 	responseWriter http.ResponseWriter
 	statusCode     int
@@ -35,6 +38,8 @@ func (interceptor *ResponseInterceptor) WriteHeader(statusCode int) {
 	interceptor.responseWriter.WriteHeader(statusCode)
 }
 
+// LoggingMiddleware журналирует метод, URI, ID, статус, размер и длительность после next.
+// Отсутствующий X-Request-ID создаётся для журнала.
 func LoggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()

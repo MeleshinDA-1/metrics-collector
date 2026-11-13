@@ -40,6 +40,28 @@ func TestMetricsStoreUpdate(t *testing.T) {
 			},
 		},
 		{
+			name: "gauges from different collectors are merged",
+			updates: []metricsUpdate{
+				{
+					gauges: map[string]float64{
+						"Alloc": 10,
+					},
+				},
+				{
+					gauges: map[string]float64{
+						"TotalMemory": 2048,
+					},
+				},
+			},
+			want: metricsSnapshot{
+				gauges: map[string]float64{
+					"Alloc":       10,
+					"TotalMemory": 2048,
+				},
+				counters: map[string]int64{},
+			},
+		},
+		{
 			name: "counters are accumulated",
 			updates: []metricsUpdate{
 				{
@@ -91,32 +113,62 @@ func TestMetricsStoreUpdate(t *testing.T) {
 				store.update(update.gauges, update.counters)
 			}
 
-			assertMetricsSnapshot(t, store.snapshot(), test.want)
+			assertMetricsSnapshot(t, storeState(store), test.want)
 		})
 	}
 }
 
-func TestMetricsStoreSnapshotReturnsCopies(t *testing.T) {
+func TestMetricsStoreDrainResetsCountersAndKeepsGauges(t *testing.T) {
 	store := newMetricsStore()
 	store.update(
 		map[string]float64{
 			"Alloc": 42,
 		},
 		map[string]int64{
-			"PollCount": 1,
+			"PollCount": 3,
 		},
 	)
 
-	snapshot := store.snapshot()
-	snapshot.gauges["Alloc"] = 100
-	snapshot.counters["PollCount"] = 100
+	drained := store.drain()
 
-	assertMetricsSnapshot(t, store.snapshot(), metricsSnapshot{
+	assertMetricsSnapshot(t, drained, metricsSnapshot{
 		gauges: map[string]float64{
 			"Alloc": 42,
 		},
 		counters: map[string]int64{
-			"PollCount": 1,
+			"PollCount": 3,
+		},
+	})
+	assertMetricsSnapshot(t, storeState(store), metricsSnapshot{
+		gauges: map[string]float64{
+			"Alloc": 42,
+		},
+		counters: map[string]int64{},
+	})
+
+	drained.counters["PollCount"] = 100
+	drained.gauges["Alloc"] = 100
+
+	assertMetricsSnapshot(t, storeState(store), metricsSnapshot{
+		gauges: map[string]float64{
+			"Alloc": 42,
+		},
+		counters: map[string]int64{},
+	})
+}
+
+func TestMetricsStoreRestoreCountersAddsDeltasBack(t *testing.T) {
+	store := newMetricsStore()
+	store.update(nil, map[string]int64{"PollCount": 3})
+
+	drained := store.drain()
+	store.update(nil, map[string]int64{"PollCount": 1})
+	store.restoreCounters(drained.counters)
+
+	assertMetricsSnapshot(t, storeState(store), metricsSnapshot{
+		gauges: map[string]float64{},
+		counters: map[string]int64{
+			"PollCount": 4,
 		},
 	})
 }
@@ -130,5 +182,20 @@ func assertMetricsSnapshot(t *testing.T, got metricsSnapshot, want metricsSnapsh
 
 	if !reflect.DeepEqual(got.counters, want.counters) {
 		t.Fatalf("counters = %v, want %v", got.counters, want.counters)
+	}
+}
+
+func storeState(store *metricsStore) metricsSnapshot {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	counters := make(map[string]int64, len(store.current.counters))
+	for metricName, metricValue := range store.current.counters {
+		counters[metricName] = metricValue
+	}
+
+	return metricsSnapshot{
+		gauges:   copyGauges(store.current.gauges),
+		counters: counters,
 	}
 }

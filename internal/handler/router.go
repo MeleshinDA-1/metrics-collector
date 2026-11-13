@@ -1,3 +1,4 @@
+// Пакет handler объединяет HTTP-маршруты метрик и проверки БД, журналирование, gzip и подписи.
 package handler
 
 import (
@@ -7,6 +8,7 @@ import (
 	"github.com/gorilla/mux"
 )
 
+// MetricsEndpoints задаёт обработчики HTTP API метрик.
 type MetricsEndpoints interface {
 	ListMetrics(http.ResponseWriter, *http.Request)
 	UpdateMetrics(http.ResponseWriter, *http.Request)
@@ -16,17 +18,29 @@ type MetricsEndpoints interface {
 	ValueMetricsJSON(http.ResponseWriter, *http.Request)
 }
 
+// PingEndpoints задаёт обработчик проверки БД.
 type PingEndpoints interface {
 	PingDB(http.ResponseWriter, *http.Request)
 }
 
-func NewRouter(metricsEndpoints MetricsEndpoints, pingEndpoints PingEndpoints) http.Handler {
+// NewRouter регистрирует маршруты метрик и проверки БД с журналированием, gzip и HMAC.
+// Обработчики не должны быть nil.
+// Пустой signingKey отключает HMAC.
+func NewRouter(
+	metricsEndpoints MetricsEndpoints,
+	pingEndpoints PingEndpoints,
+	signingKey string,
+) http.Handler {
 	router := mux.NewRouter()
 
 	registerMetricsRoutes(router, metricsEndpoints)
 	registerPingRoutes(router, pingEndpoints)
 
-	return middleware.LoggingMiddleware(middleware.CompressingMiddleware(router))
+	return middleware.LoggingMiddleware(
+		middleware.CompressingMiddleware(
+			middleware.SigningMiddleware(signingKey)(router),
+		),
+	)
 }
 
 func registerMetricsRoutes(r *mux.Router, metricsEndpoints MetricsEndpoints) {

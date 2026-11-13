@@ -1,0 +1,11 @@
+Total: 1.60GB
+ROUTINE ======================== compress/flate.NewWriter in C:\Program Files\Go\src\compress\flate\deflate.go
+    1.24GB     1.50GB (flat, cum) 94.02% of Total
+         .          .    664:func NewWriter(w io.Writer, level int) (*Writer, error) {
+    1.24GB     1.24GB    665:	var dw Writer
+         .   273.47MB    666:	if err := dw.d.init(w, level); err != nil {
+         .          .    667:		return nil, err
+         .          .    668:	}
+         .          .    669:	return &dw, nil
+         .          .    670:}
+         .          .    671:

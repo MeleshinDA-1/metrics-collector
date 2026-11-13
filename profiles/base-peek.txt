@@ -1,0 +1,46 @@
+File: agent.test.exe
+Build ID: C:\Users\meles\AppData\Local\Temp\go-build1945562311\b001\agent.test.exe2026-10-28 09:04:38.1005087 +0300 MSK
+Type: alloc_space
+Time: 2026-10-28 09:04:39 MSK
+Showing nodes accounting for 1677665.27kB, 100% of 1677665.27kB total
+----------------------------------------------------------+-------------
+      flat  flat%   sum%        cum   cum%   calls calls% + context
+----------------------------------------------------------+-------------
+                                        44356.91kB 99.82% |   github.com/MeleshinDA-1/metrics-collector/internal/handler.NewRouter.CompressingMiddleware.func3
+                                           80.44kB  0.18% |   github.com/MeleshinDA-1/metrics-collector/internal/agent.BenchmarkMetricsPipeline (inline)
+  689.56kB 0.041% 0.041% 44437.34kB  2.65%                | compress/gzip.NewReader
+                                        43747.78kB 98.45% |   compress/gzip.(*Reader).Reset
+----------------------------------------------------------+-------------
+                                          312.81kB   100% |   compress/gzip.NewWriter
+  312.81kB 0.019%  0.06%   312.81kB 0.019%                | compress/gzip.NewWriterLevel
+----------------------------------------------------------+-------------
+                                            0.05kB   100% |   io.ReadAll
+    0.05kB 2.8e-06%  0.06%     0.05kB 2.8e-06%                | compress/gzip.(*Reader).Read
+----------------------------------------------------------+-------------
+                                        39649.94kB   100% |   compress/gzip.(*Reader).Reset
+    0.05kB 2.8e-06%  0.06% 39649.94kB  2.36%                | compress/gzip.(*Reader).readHeader
+                                        39649.89kB   100% |   compress/flate.NewReader
+----------------------------------------------------------+-------------
+                                        43747.78kB   100% |   compress/gzip.NewReader
+         0     0%  0.06% 43747.78kB  2.61%                | compress/gzip.(*Reader).Reset
+                                        39649.94kB 90.63% |   compress/gzip.(*Reader).readHeader
+                                         4097.84kB  9.37% |   bufio.NewReader (inline)
+----------------------------------------------------------+-------------
+                                         7507.50kB 50.00% |   github.com/MeleshinDA-1/metrics-collector/internal/agent.BenchmarkMetricsPipeline.withGzipCompression.func4
+                                         7507.50kB 50.00% |   github.com/MeleshinDA-1/metrics-collector/internal/handler/middleware.(*compressingResponseWriter).Close
+         0     0%  0.06%    15015kB  0.89%                | compress/gzip.(*Writer).Close
+                                           15015kB   100% |   compress/flate.(*Writer).Close (inline)
+----------------------------------------------------------+-------------
+                                       788733.44kB 50.00% |   github.com/MeleshinDA-1/metrics-collector/internal/agent.BenchmarkMetricsPipeline.writeRaw.func3
+                                       788725.44kB 50.00% |   github.com/MeleshinDA-1/metrics-collector/internal/handler/middleware.(*compressingResponseWriter).Write
+         0     0%  0.06% 1577458.88kB 94.03%                | compress/gzip.(*Writer).Write
+                                      1577325.75kB   100% |   compress/flate.NewWriter (inline)
+                                           62.56kB 0.004% |   bytes.(*Buffer).Write
+                                           62.56kB 0.004% |   github.com/MeleshinDA-1/metrics-collector/internal/handler/middleware.(*ResponseInterceptor).Write
+                                               8kB 0.00051% |   hash/crc32.Update (inline)
+----------------------------------------------------------+-------------
+                                          156.41kB 50.00% |   github.com/MeleshinDA-1/metrics-collector/internal/agent.BenchmarkMetricsPipeline.withGzipCompression.func4 (inline)
+                                          156.41kB 50.00% |   github.com/MeleshinDA-1/metrics-collector/internal/handler/middleware.(*compressingResponseWriter).enableGzip (inline)
+         0     0%  0.06%   312.81kB 0.019%                | compress/gzip.NewWriter
+                                          312.81kB   100% |   compress/gzip.NewWriterLevel
+----------------------------------------------------------+-------------

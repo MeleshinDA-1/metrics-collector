@@ -1,3 +1,4 @@
+// Пакет server управляет HTTP-сервером, хранилищем и аудитом.
 package server
 
 import (
@@ -7,7 +8,9 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"time"
 
+	"github.com/MeleshinDA-1/metrics-collector/internal/audit"
 	"github.com/MeleshinDA-1/metrics-collector/internal/config"
 	"github.com/MeleshinDA-1/metrics-collector/internal/handler"
 	"github.com/MeleshinDA-1/metrics-collector/internal/handler/health"
@@ -17,16 +20,38 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"golang.org/x/sync/errgroup"
 )
 
-func Run(serverConfig config.ServerConfig) error {
+const shutdownTimeout = 5 * time.Second
+
+// Run инициализирует хранилище и аудит, обслуживает HTTP до отмены ctx или ошибки.
+// DSN PostgreSQL приоритетнее файлового хранения и требует миграций в ./migrations.
+// Штатная остановка ждёт завершения запросов до пяти секунд, затем сохраняет снимок,
+// если файловое хранение включено.
+func Run(ctx context.Context, serverConfig config.ServerConfig) error {
 	ConfigureLogger(serverConfig)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	var observers []audit.Observer
+	if serverConfig.AuditFile != "" {
+		observer, err := audit.NewFileObserver(serverConfig.AuditFile)
+		if err != nil {
+			return err
+		}
+		defer observer.Close()
+		observers = append(observers, observer)
+	}
+	if serverConfig.AuditURL != "" {
+		observer, err := audit.NewHTTPObserver(serverConfig.AuditURL)
+		if err != nil {
+			return err
+		}
+		observers = append(observers, observer)
+	}
 
 	var pinger health.DBPinger
 	var metricsEndpoints handler.MetricsEndpoints
+	var saveMetrics func(context.Context) error
 
 	switch {
 	case serverConfig.PostgresConnectionString != "":
@@ -47,11 +72,12 @@ func Run(serverConfig config.ServerConfig) error {
 		pinger = pool
 		metricsEndpoints = metrics.NewMetricsHandler(
 			repository.NewDBMetricStorage(pool, retry.DefaultPolicy()),
+			observers...,
 		)
 
 	default:
 		storage := repository.NewMemStorage()
-		metricsHandler := metrics.NewMetricsHandler(storage)
+		metricsHandler := metrics.NewMetricsHandler(storage, observers...)
 		metricsEndpoints = metricsHandler
 
 		if serverConfig.FileStoragePath != "" {
@@ -75,12 +101,57 @@ func Run(serverConfig config.ServerConfig) error {
 					}
 				}()
 			}
+
+			saveMetrics = func(ctx context.Context) error {
+				return fileRepository.Flush(ctx, storage)
+			}
 		}
 	}
 
-	router := handler.NewRouter(metricsEndpoints, health.NewPingHandler(pinger))
+	httpServer := &http.Server{
+		Addr: serverConfig.Address,
+		Handler: handler.NewRouter(
+			metricsEndpoints,
+			health.NewPingHandler(pinger),
+			serverConfig.Key,
+		),
+	}
 
-	return http.ListenAndServe(serverConfig.Address, router)
+	group, groupCtx := errgroup.WithContext(ctx)
+
+	group.Go(func() error {
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return fmt.Errorf("run http server: %w", err)
+		}
+
+		return nil
+	})
+
+	group.Go(func() error {
+		<-groupCtx.Done()
+
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+
+		return httpServer.Shutdown(shutdownCtx)
+	})
+
+	if err := group.Wait(); err != nil {
+		return err
+	}
+
+	if saveMetrics == nil {
+		return nil
+	}
+
+	saveCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+
+	if err := saveMetrics(saveCtx); err != nil {
+		return fmt.Errorf("save metrics on shutdown: %w", err)
+	}
+
+	return nil
 }
 
 func runMigrations(connectionString string) error {

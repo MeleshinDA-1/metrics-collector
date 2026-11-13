@@ -1,0 +1,44 @@
+[
+  {
+    "Phase": "base",
+    "Benchmark": "BenchmarkBuildBatch",
+    "Ns": 577.7,
+    "Bytes": 2568,
+    "Allocs": 34
+  },
+  {
+    "Phase": "base",
+    "Benchmark": "BenchmarkEncodeBatch",
+    "Ns": 59399.0,
+    "Bytes": 816645,
+    "Allocs": 24
+  },
+  {
+    "Phase": "base",
+    "Benchmark": "BenchmarkMetricsPipeline",
+    "Ns": 169618.0,
+    "Bytes": 1715893,
+    "Allocs": 339
+  },
+  {
+    "Phase": "result",
+    "Benchmark": "BenchmarkBuildBatch",
+    "Ns": 600.9,
+    "Bytes": 2568,
+    "Allocs": 34
+  },
+  {
+    "Phase": "result",
+    "Benchmark": "BenchmarkEncodeBatch",
+    "Ns": 19842.0,
+    "Bytes": 2752,
+    "Allocs": 8
+  },
+  {
+    "Phase": "result",
+    "Benchmark": "BenchmarkMetricsPipeline",
+    "Ns": 90866.0,
+    "Bytes": 87918,
+    "Allocs": 304
+  }
+]

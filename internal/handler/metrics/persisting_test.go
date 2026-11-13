@@ -77,7 +77,7 @@ func TestUpdateMetricsJSONSavesSynchronously(t *testing.T) {
 	)
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
-	handler.NewRouter(metricsHandler, health.NewPingHandler(nil)).ServeHTTP(response, request)
+	handler.NewRouter(metricsHandler, health.NewPingHandler(nil), "").ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)

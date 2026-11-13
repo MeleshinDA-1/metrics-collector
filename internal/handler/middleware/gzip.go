@@ -5,11 +5,13 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+
+	"github.com/MeleshinDA-1/metrics-collector/internal/compression"
 )
 
 type compressingResponseWriter struct {
 	http.ResponseWriter
-	gzipWriter *gzip.Writer
+	gzipWriter *compression.Writer
 }
 
 func (w *compressingResponseWriter) enableGzip() {
@@ -19,7 +21,7 @@ func (w *compressingResponseWriter) enableGzip() {
 
 	w.Header().Set("Content-Encoding", "gzip")
 	w.Header().Del("Content-Length")
-	w.gzipWriter = gzip.NewWriter(w.ResponseWriter)
+	w.gzipWriter = compression.NewWriter(w.ResponseWriter)
 }
 
 func (w *compressingResponseWriter) Write(data []byte) (int, error) {
@@ -50,6 +52,9 @@ func (w *compressingResponseWriter) Close() error {
 	return w.gzipWriter.Close()
 }
 
+// CompressingMiddleware распаковывает gzip-запросы и сжимает JSON/HTML-ответы,
+// если Accept-Encoding содержит gzip. Неверный заголовок gzip даёт 400 до next.
+// Размещается снаружи SigningMiddleware для подписи несжатых данных.
 func CompressingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.Header.Get("Content-Encoding"), "gzip") {

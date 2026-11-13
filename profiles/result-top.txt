@@ -1,0 +1,18 @@
+File: agent.test.exe
+Build ID: C:\Users\meles\AppData\Local\Temp\go-build3793935960\b001\agent.test.exe2026-10-28 09:09:34.5790854 +0300 MSK
+Type: alloc_space
+Time: 2026-10-28 09:09:36 MSK
+Showing nodes accounting for 75MB, 88.24% of 85MB total
+Dropped 299 nodes (cum <= 0.42MB)
+Showing top 10 nodes out of 86
+      flat  flat%   sum%        cum   cum%
+   31.34MB 36.88% 36.88%    31.34MB 36.88%  compress/flate.(*dictDecoder).init (inline)
+   12.01MB 14.12% 51.00%    12.01MB 14.12%  bufio.NewReaderSize
+    7.38MB  8.68% 59.68%    38.72MB 45.56%  compress/flate.NewReader
+    5.87MB  6.90% 66.58%     5.87MB  6.90%  encoding/json.(*Decoder).refill
+    4.89MB  5.76% 72.34%     4.89MB  5.76%  bytes.growSlice
+    4.22MB  4.97% 77.31%     4.22MB  4.97%  reflect.growslice
+    3.86MB  4.54% 81.84%     3.86MB  4.54%  io.ReadAll
+    2.46MB  2.89% 84.73%     2.46MB  2.89%  github.com/MeleshinDA-1/metrics-collector/internal/agent.buildBatch
+    1.83MB  2.16% 86.89%     1.83MB  2.16%  net/http.(*Request).WithContext
+    1.15MB  1.35% 88.24%     1.20MB  1.41%  net/textproto.MIMEHeader.Set
