@@ -17,7 +17,7 @@ jobs:
       - name: Check Go formatting
         shell: bash
         run: |
-          unformatted=$(git ls-files -z -- '*.go' | xargs -0 gofmt -l)
+          unformatted=$(git -c safe.directory="$GITHUB_WORKSPACE" ls-files -z -- '*.go' | xargs -0 gofmt -l)
           if [ -n "$unformatted" ]; then
             echo "Run gofmt on these files:"
             printf '%s\n' "$unformatted"
