@@ -17,7 +17,9 @@ type MetricsSnapshot = model.MetricsSnapshot
 
 // MetricsStorage задаёт операции MetricsHandler с поддержкой параллельных запросов.
 type MetricsStorage interface {
+	// SetGauge создаёт или заменяет gauge.
 	SetGauge(ctx context.Context, name string, value float64) error
+	// AddCounter прибавляет delta к счётчику и возвращает итог.
 	AddCounter(ctx context.Context, name string, delta int64) (int64, error)
 	// UpdateBatch применяет пакет с проверенными типами и Value/Delta не nil.
 	UpdateBatch(ctx context.Context, metrics []model.Metrics) error
@@ -25,6 +27,7 @@ type MetricsStorage interface {
 	GetGauge(ctx context.Context, name string) (float64, bool, error)
 	// GetCounter возвращает итог и признак наличия метрики.
 	GetCounter(ctx context.Context, name string) (int64, bool, error)
+	// Snapshot возвращает значения всех метрик по именам.
 	Snapshot(ctx context.Context) (MetricsSnapshot, error)
 }
 

@@ -11,10 +11,12 @@ type Policy struct {
 	intervals []time.Duration
 }
 
+// NewPolicy задаёт задержку перед каждой повторной попыткой.
 func NewPolicy(intervals ...time.Duration) Policy {
 	return Policy{intervals: intervals}
 }
 
+// DefaultPolicy задаёт три повтора с задержками 1, 3 и 5 секунд.
 func DefaultPolicy() Policy {
 	return NewPolicy(1*time.Second, 3*time.Second, 5*time.Second)
 }

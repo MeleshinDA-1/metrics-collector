@@ -15,12 +15,15 @@ type Writer struct {
 	gzip *gzip.Writer
 }
 
+// NewWriter возвращает компрессор для записи в dst.
+// После записи не забудь вызвать Close.
 func NewWriter(dst io.Writer) *Writer {
 	writer := writers.Get().(*gzip.Writer)
 	writer.Reset(dst)
 	return &Writer{gzip: writer}
 }
 
+// Write сжимает data. При записи в закрытый Writer возвращает io.ErrClosedPipe.
 func (w *Writer) Write(data []byte) (int, error) {
 	if w.gzip == nil {
 		return 0, io.ErrClosedPipe
