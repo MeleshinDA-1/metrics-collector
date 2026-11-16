@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -106,6 +108,56 @@ func TestAuditSuccessfulUpdatesAndContinue(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestAuditHTTPRetryAndContinue(t *testing.T) {
+	var calls atomic.Int32
+	received := make(chan audit.Event, 6)
+	receiver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var event audit.Event
+		if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
+			t.Errorf("decode audit: %v", err)
+		}
+		select {
+		case received <- event:
+		default:
+			t.Error("unexpected extra audit request")
+		}
+		if calls.Add(1)%3 == 2 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer receiver.Close()
+	remote, err := audit.NewHTTPObserver(receiver.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	storage := repository.NewMemStorage()
+	other := &auditRecorder{}
+	router := handler.NewRouter(NewMetricsHandler(storage, remote, other), health.NewPingHandler(nil), "")
+	for update := range 4 {
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/update/counter/PollCount/1", nil))
+		value, ok, err := storage.GetCounter(context.Background(), "PollCount")
+		if response.Code != http.StatusOK || err != nil || !ok || value != int64(update+1) {
+			t.Fatalf("update %d: status = %d, counter = %d, found = %v, error = %v", update, response.Code, value, ok, err)
+		}
+	}
+	if got := calls.Load(); got != 6 || len(other.events) != 4 {
+		t.Fatalf("HTTP attempts = %d, other observer events = %d; want 6 and 4", got, len(other.events))
+	}
+	for _, event := range []audit.Event{other.events[0], other.events[1], other.events[1], other.events[2], other.events[3], other.events[3]} {
+		select {
+		case got := <-received:
+			if !reflect.DeepEqual(got, event) {
+				t.Fatalf("HTTP event = %+v, want %+v", got, event)
+			}
+		default:
+			t.Fatal("missing audit request")
+		}
 	}
 }
 
