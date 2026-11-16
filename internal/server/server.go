@@ -52,6 +52,17 @@ func Run(ctx context.Context, serverConfig config.ServerConfig) error {
 	var pinger health.DBPinger
 	var metricsEndpoints handler.MetricsEndpoints
 	var saveMetrics func(context.Context) error
+	var metricsHandler *metrics.MetricsHandler
+	defer func() {
+		if metricsHandler == nil {
+			return
+		}
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+		if err := metricsHandler.Close(shutdownCtx); err != nil {
+			slog.Error("unable to finish metrics audit", "error", err)
+		}
+	}()
 
 	switch {
 	case serverConfig.PostgresConnectionString != "":
@@ -70,14 +81,15 @@ func Run(ctx context.Context, serverConfig config.ServerConfig) error {
 		defer pool.Close()
 
 		pinger = pool
-		metricsEndpoints = metrics.NewMetricsHandler(
+		metricsHandler = metrics.NewMetricsHandler(
 			repository.NewDBMetricStorage(pool, retry.DefaultPolicy()),
 			observers...,
 		)
+		metricsEndpoints = metricsHandler
 
 	default:
 		storage := repository.NewMemStorage()
-		metricsHandler := metrics.NewMetricsHandler(storage, observers...)
+		metricsHandler = metrics.NewMetricsHandler(storage, observers...)
 		metricsEndpoints = metricsHandler
 
 		if serverConfig.FileStoragePath != "" {

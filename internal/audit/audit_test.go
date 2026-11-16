@@ -62,19 +62,30 @@ func TestPublisherContinuesAfterHTTPFailure(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer file.Close()
-			publisher := NewPublisher(remote, file)
+			results := make(chan error, 2)
+			publisher := NewPublisher(observerFunc(func(ctx context.Context, event Event) error {
+				err := remote.Notify(ctx, event)
+				results <- err
+				return err
+			}), file)
+			defer closePublisher(t, publisher)
 			want := []Event{
 				{Timestamp: 123, Metrics: []string{"Alloc", "Frees"}, IPAddress: "192.0.2.1"},
 				{Timestamp: 124, Metrics: []string{"PollCount"}, IPAddress: "::1"},
 			}
 			var wantHTTP []Event
 			for _, event := range want {
-				err := publisher.Publish(context.Background(), event)
-				if (err != nil) != test.wantErr {
-					t.Fatalf("publish error = %v, want error = %v", err, test.wantErr)
+				if err := publisher.Publish(event); err != nil {
+					t.Fatalf("publish error = %v", err)
 				}
 				for range test.attempts {
 					wantHTTP = append(wantHTTP, event)
+				}
+			}
+			closePublisher(t, publisher)
+			for range want {
+				if err := <-results; (err != nil) != test.wantErr {
+					t.Fatalf("notify error = %v, want error = %v", err, test.wantErr)
 				}
 			}
 			var gotHTTP []Event
@@ -176,9 +187,12 @@ func TestFileFailureDoesNotStopHTTPObserver(t *testing.T) {
 		t.Fatal(err)
 	}
 	event := Event{Timestamp: time.Now().Unix(), Metrics: []string{"Alloc"}, IPAddress: "127.0.0.1"}
-	if err := NewPublisher(file, remote).Publish(context.Background(), event); err == nil {
-		t.Fatal("expected closed file error")
+	publisher := NewPublisher(file, remote)
+	defer closePublisher(t, publisher)
+	if err := publisher.Publish(event); err != nil {
+		t.Fatal(err)
 	}
+	closePublisher(t, publisher)
 	select {
 	case got := <-received:
 		if !reflect.DeepEqual(got, event) {

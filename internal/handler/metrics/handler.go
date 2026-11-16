@@ -31,7 +31,7 @@ type MetricsStorage interface {
 	Snapshot(ctx context.Context) (MetricsSnapshot, error)
 }
 
-// MetricsHandler читает и обновляет метрики, синхронно отправляет успешные обновления в аудит.
+// MetricsHandler читает и обновляет метрики, передаёт успешные обновления в аудит.
 // Ошибки аудита журналируются и не меняют HTTP-ответ.
 type MetricsHandler struct {
 	storage MetricsStorage
@@ -46,15 +46,19 @@ func NewMetricsHandler(storage MetricsStorage, observers ...audit.Observer) *Met
 	}
 }
 
+// Close завершает доставку аудита, отменяя её при завершении ctx.
+func (handler *MetricsHandler) Close(ctx context.Context) error {
+	return handler.audit.Close(ctx)
+}
+
 func (handler *MetricsHandler) auditMetrics(req *http.Request, names ...string) {
 	ip, _, err := net.SplitHostPort(req.RemoteAddr)
 	if err != nil {
 		ip = req.RemoteAddr
 	}
 	event := audit.Event{Timestamp: time.Now().Unix(), Metrics: names, IPAddress: ip}
-	// Сохранённые метрики требуют аудита даже после отключения клиента.
-	if err := handler.audit.Publish(context.WithoutCancel(req.Context()), event); err != nil {
-		slog.Error("unable to deliver metrics audit", "metrics", names, "error", err)
+	if err := handler.audit.Publish(event); err != nil {
+		slog.Error("unable to enqueue metrics audit", "metrics", names, "error", err)
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -24,13 +25,37 @@ import (
 )
 
 type auditRecorder struct {
-	events []audit.Event
-	err    error
+	events   []audit.Event
+	err      error
+	received chan audit.Event
 }
 
 func (r *auditRecorder) Notify(_ context.Context, event audit.Event) error {
 	r.events = append(r.events, event)
+	if r.received != nil {
+		r.received <- event
+	}
 	return r.err
+}
+
+func closeAudit(t *testing.T, handler *MetricsHandler) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := handler.Close(ctx); err != nil {
+		t.Errorf("close audit: %v", err)
+	}
+}
+
+func nextAuditEvent(t *testing.T, events <-chan audit.Event) audit.Event {
+	t.Helper()
+	select {
+	case event := <-events:
+		return event
+	case <-time.After(3 * time.Second):
+		t.Fatal("audit event was not delivered")
+		return audit.Event{}
+	}
 }
 
 func TestAuditSuccessfulUpdatesAndContinue(t *testing.T) {
@@ -42,8 +67,9 @@ func TestAuditSuccessfulUpdatesAndContinue(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			storage := repository.NewMemStorage()
 			observer := &auditRecorder{err: errors.New("receiver unavailable")}
-			other := &auditRecorder{}
+			other := &auditRecorder{received: make(chan audit.Event, 6)}
 			metricsHandler := NewMetricsHandler(storage, observer, other)
+			defer closeAudit(t, metricsHandler)
 			var endpoints handler.MetricsEndpoints = metricsHandler
 			fileRepo := &repository.FileMetricsRepository{FilePath: filepath.Join(t.TempDir(), "metrics.json")}
 			if persistent {
@@ -79,7 +105,7 @@ func TestAuditSuccessfulUpdatesAndContinue(t *testing.T) {
 					if response.Code != http.StatusOK {
 						t.Fatalf("cycle %d %s: status = %d, body = %s", cycle, update.path, response.Code, response.Body)
 					}
-					event := other.events[len(other.events)-1]
+					event := nextAuditEvent(t, other.received)
 					if !reflect.DeepEqual(event.Metrics, update.names) || event.IPAddress != update.ip || event.Timestamp < start || event.Timestamp > time.Now().Unix() {
 						t.Fatalf("%s: event = %+v, want names %v, IP %s, current timestamp", update.path, event, update.names, update.ip)
 					}
@@ -94,6 +120,7 @@ func TestAuditSuccessfulUpdatesAndContinue(t *testing.T) {
 					t.Fatalf("cycle %d: counter status = %d, value = %q, want %s", cycle, response.Code, response.Body.String(), want)
 				}
 			}
+			closeAudit(t, metricsHandler)
 			if len(observer.events) != 6 || !reflect.DeepEqual(observer.events, other.events) {
 				t.Fatalf("expected six identical events per observer: first=%+v, second=%+v", observer.events, other.events)
 			}
@@ -114,6 +141,9 @@ func TestAuditSuccessfulUpdatesAndContinue(t *testing.T) {
 func TestAuditHTTPRetryAndContinue(t *testing.T) {
 	var calls atomic.Int32
 	received := make(chan audit.Event, 6)
+	started := make(chan struct{})
+	release := make(chan struct{})
+	releaseHTTP := sync.OnceFunc(func() { close(release) })
 	receiver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var event audit.Event
 		if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
@@ -124,7 +154,16 @@ func TestAuditHTTPRetryAndContinue(t *testing.T) {
 		default:
 			t.Error("unexpected extra audit request")
 		}
-		if calls.Add(1)%3 == 2 {
+		call := calls.Add(1)
+		if call == 1 {
+			close(started)
+			select {
+			case <-release:
+			case <-r.Context().Done():
+				return
+			}
+		}
+		if call%3 == 2 {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
 		}
@@ -136,16 +175,38 @@ func TestAuditHTTPRetryAndContinue(t *testing.T) {
 		t.Fatal(err)
 	}
 	storage := repository.NewMemStorage()
-	other := &auditRecorder{}
-	router := handler.NewRouter(NewMetricsHandler(storage, remote, other), health.NewPingHandler(nil), "")
+	other := &auditRecorder{received: make(chan audit.Event, 4)}
+	metricsHandler := NewMetricsHandler(storage, remote, other)
+	defer func() {
+		releaseHTTP()
+		closeAudit(t, metricsHandler)
+	}()
+	router := handler.NewRouter(metricsHandler, health.NewPingHandler(nil), "")
 	for update := range 4 {
 		response := httptest.NewRecorder()
-		router.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/update/counter/PollCount/1", nil))
+		done := make(chan struct{})
+		go func() {
+			router.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/update/counter/PollCount/1", nil))
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Fatal("metrics update waited for HTTP audit delivery")
+		}
+		nextAuditEvent(t, other.received)
 		value, ok, err := storage.GetCounter(context.Background(), "PollCount")
 		if response.Code != http.StatusOK || err != nil || !ok || value != int64(update+1) {
 			t.Fatalf("update %d: status = %d, counter = %d, found = %v, error = %v", update, response.Code, value, ok, err)
 		}
 	}
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("HTTP audit did not start")
+	}
+	releaseHTTP()
+	closeAudit(t, metricsHandler)
 	if got := calls.Load(); got != 6 || len(other.events) != 4 {
 		t.Fatalf("HTTP attempts = %d, other observer events = %d; want 6 and 4", got, len(other.events))
 	}
@@ -163,7 +224,9 @@ func TestAuditHTTPRetryAndContinue(t *testing.T) {
 
 func TestAuditSkipsRejectedRequests(t *testing.T) {
 	observer := &auditRecorder{}
-	router := handler.NewRouter(NewMetricsHandler(repository.NewMemStorage(), observer), health.NewPingHandler(nil), "secret")
+	metricsHandler := NewMetricsHandler(repository.NewMemStorage(), observer)
+	defer closeAudit(t, metricsHandler)
+	router := handler.NewRouter(metricsHandler, health.NewPingHandler(nil), "secret")
 	for _, request := range []struct{ path, body string }{
 		{"/update/counter/PollCount/no", ""},
 		{"/update/", "{"},
@@ -181,6 +244,7 @@ func TestAuditSkipsRejectedRequests(t *testing.T) {
 	request.Header.Set(hash.Header, "invalid")
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
+	closeAudit(t, metricsHandler)
 	if response.Code != http.StatusBadRequest || len(observer.events) != 0 {
 		t.Fatalf("bad signature status = %d, events after rejections = %+v", response.Code, observer.events)
 	}
@@ -205,6 +269,7 @@ func TestAuditSkipsStorageAndFlushFailures(t *testing.T) {
 				storage = failingAuditStorage{storage}
 			}
 			metricsHandler := NewMetricsHandler(storage, observer)
+			defer closeAudit(t, metricsHandler)
 			var endpoints handler.MetricsEndpoints = metricsHandler
 			if failure == "flush" {
 				endpoints = NewPersistingMetricsHandler(metricsHandler, &repository.FileMetricsRepository{FilePath: t.TempDir()})
@@ -221,6 +286,7 @@ func TestAuditSkipsStorageAndFlushFailures(t *testing.T) {
 					t.Fatalf("%s: status = %d, want 500", update.path, response.Code)
 				}
 			}
+			closeAudit(t, metricsHandler)
 			if len(observer.events) != 0 {
 				t.Fatalf("failed updates produced events: %+v", observer.events)
 			}
