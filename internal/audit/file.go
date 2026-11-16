@@ -24,10 +24,16 @@ func NewFileObserver(path string) (*FileObserver, error) {
 }
 
 func (o *FileObserver) Notify(_ context.Context, event Event) error {
+	data, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("encode audit event: %w", err)
+	}
+	data = append(data, '\n')
+
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
-	if err := json.NewEncoder(o.file).Encode(event); err != nil {
+	if _, err := o.file.Write(data); err != nil {
 		return fmt.Errorf("append audit event: %w", err)
 	}
 	return nil
