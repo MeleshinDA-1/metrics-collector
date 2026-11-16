@@ -23,7 +23,7 @@ func BenchmarkMemStorage(b *testing.B) {
 			}
 			b.Run("UpdateBatch", func(b *testing.B) {
 				b.ReportAllocs()
-				for range b.N {
+				for b.Loop() {
 					if err := storage.UpdateBatch(ctx, batch); err != nil {
 						b.Fatal(err)
 					}
@@ -31,7 +31,7 @@ func BenchmarkMemStorage(b *testing.B) {
 			})
 			b.Run("GetGauge", func(b *testing.B) {
 				b.ReportAllocs()
-				for range b.N {
+				for b.Loop() {
 					if _, ok, err := storage.GetGauge(ctx, batch[0].ID); err != nil || !ok {
 						b.Fatalf("gauge: found %v, error %v", ok, err)
 					}
@@ -39,7 +39,7 @@ func BenchmarkMemStorage(b *testing.B) {
 			})
 			b.Run("Snapshot", func(b *testing.B) {
 				b.ReportAllocs()
-				for range b.N {
+				for b.Loop() {
 					if snapshot, err := storage.Snapshot(ctx); err != nil || len(snapshot.Gauges) != size {
 						b.Fatalf("snapshot: %d gauges, error %v", len(snapshot.Gauges), err)
 					}

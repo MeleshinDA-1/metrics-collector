@@ -39,8 +39,7 @@ func benchmarkSnapshot() metricsSnapshot {
 func BenchmarkBuildBatch(b *testing.B) {
 	snapshot := benchmarkSnapshot()
 	b.ReportAllocs()
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		batch := buildBatch(snapshot)
 		if len(batch) != 33 {
 			b.Fatalf("batch length = %d, want 33", len(batch))
@@ -51,8 +50,7 @@ func BenchmarkBuildBatch(b *testing.B) {
 func BenchmarkEncodeBatch(b *testing.B) {
 	batch := buildBatch(benchmarkSnapshot())
 	b.ReportAllocs()
-	b.ResetTimer()
-	for range b.N {
+	for b.Loop() {
 		payload, err := buildRequestBody(encodeJSON(batch))
 		if err != nil {
 			b.Fatal(err)
@@ -74,9 +72,10 @@ func BenchmarkMetricsPipeline(b *testing.B) {
 	router := handler.NewRouter(metrics.NewMetricsHandler(storage), health.NewPingHandler(nil), "benchmark-key")
 	snapshot := benchmarkSnapshot()
 	var lastResponse *httptest.ResponseRecorder
+	iterations := 0
 	b.ReportAllocs()
-	b.ResetTimer()
-	for i := range b.N {
+	for b.Loop() {
+		iterations++
 		batch := buildBatch(snapshot)
 		payload, err := buildRequestBody(encodeJSON(batch))
 		if err != nil {
@@ -98,11 +97,10 @@ func BenchmarkMetricsPipeline(b *testing.B) {
 		}
 		read := httptest.NewRecorder()
 		router.ServeHTTP(read, httptest.NewRequest(http.MethodGet, "/value/counter/PollCount", nil))
-		if want := strconv.Itoa(i + 1); read.Code != http.StatusOK || read.Body.String() != want {
+		if want := strconv.Itoa(iterations); read.Code != http.StatusOK || read.Body.String() != want {
 			b.Fatalf("counter: status %d, body %s, want %s", read.Code, read.Body, want)
 		}
 	}
-	b.StopTimer()
 	if lastResponse.Header().Get("Content-Encoding") != "gzip" {
 		b.Fatal("response was not gzip-compressed")
 	}
