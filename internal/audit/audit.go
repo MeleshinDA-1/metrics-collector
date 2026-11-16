@@ -42,6 +42,8 @@ type subscription struct {
 	events   chan Event
 }
 
+// NewPublisher запускает по одной фоновой горутине на наблюдателя.
+// Для завершения горутин вызовите Close.
 func NewPublisher(observers ...Observer) *Publisher {
 	ctx, cancel := context.WithCancel(context.Background())
 	p := &Publisher{
