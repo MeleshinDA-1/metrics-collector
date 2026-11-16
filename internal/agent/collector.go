@@ -1,20 +1,60 @@
 package agent
 
 import (
+	"context"
+	"log/slog"
 	"math/rand"
 	"runtime"
 	"time"
 )
 
-func runCollector(store *metricsStore, pollInterval time.Duration) {
-	for {
-		time.Sleep(pollInterval)
-		collectMetrics(store)
-	}
+type metricsCollector func(context.Context) (metricsSnapshot, error)
+
+func runRuntimeCollector(ctx context.Context, pollInterval time.Duration) <-chan metricsSnapshot {
+	return runCollector(ctx, pollInterval, collectRuntimeMetrics)
 }
 
-func collectMetrics(store *metricsStore) {
-	store.update(collectGauges(), collectCounters())
+func runCollector(
+	ctx context.Context,
+	pollInterval time.Duration,
+	collect metricsCollector,
+) <-chan metricsSnapshot {
+	collected := make(chan metricsSnapshot)
+
+	go func() {
+		defer close(collected)
+
+		ticker := time.NewTicker(pollInterval)
+		defer ticker.Stop()
+
+		for {
+			snapshot, err := collect(ctx)
+			if err != nil {
+				slog.Error("unable to collect metrics", "error", err)
+			} else {
+				select {
+				case collected <- snapshot:
+				case <-ctx.Done():
+					return
+				}
+			}
+
+			select {
+			case <-ticker.C:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	return collected
+}
+
+func collectRuntimeMetrics(context.Context) (metricsSnapshot, error) {
+	return metricsSnapshot{
+		gauges:   collectGauges(),
+		counters: collectCounters(),
+	}, nil
 }
 
 func collectCounters() map[string]int64 {

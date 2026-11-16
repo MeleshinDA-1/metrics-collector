@@ -9,12 +9,16 @@ import (
 	"github.com/MeleshinDA-1/metrics-collector/internal/model"
 )
 
+// UpdateMetrics обрабатывает POST /update/{metricType}/{metricName}/{metricValue}.
+// Заменяет gauge или прибавляет delta к counter; возвращает 200 с пустым телом.
+// Неверные типы и значения дают 400, ошибки хранилища дают 500. Переменные пути задаёт роутер.
 func (handler *MetricsHandler) UpdateMetrics(res http.ResponseWriter, req *http.Request) {
 	if status, err := handler.updateMetrics(req); err != nil {
 		writeError(res, status, err)
 		return
 	}
 
+	handler.auditMetrics(req, pathValue(req, "metricName"))
 	res.WriteHeader(http.StatusOK)
 }
 
@@ -41,12 +45,16 @@ func (handler *MetricsHandler) updateMetrics(req *http.Request) (int, error) {
 			return http.StatusInternalServerError, err
 		}
 	default:
-		return http.StatusBadRequest, fmt.Errorf("Unknown metric type \"%s\"", metricType)
+		return http.StatusBadRequest, fmt.Errorf("unknown metric type \"%s\"", metricType)
 	}
 
 	return http.StatusOK, nil
 }
 
+// UpdateMetricsJSON обрабатывает POST /update/ с JSON model.Metrics.
+// Counter требует delta, gauge требует value, включая нулевые значения.
+// Возвращает 200 с сохранённым gauge или итогом counter в JSON.
+// Неверный JSON, тип или отсутствие значения дают 400; сбой хранилища даёт 500.
 func (handler *MetricsHandler) UpdateMetricsJSON(res http.ResponseWriter, req *http.Request) {
 	requestMetric, status, err := handler.updateMetricsJSON(req)
 	if err != nil {
@@ -54,6 +62,7 @@ func (handler *MetricsHandler) UpdateMetricsJSON(res http.ResponseWriter, req *h
 		return
 	}
 
+	handler.auditMetrics(req, requestMetric.ID)
 	writeMetricsJSON(res, requestMetric)
 }
 
@@ -83,12 +92,15 @@ func (handler *MetricsHandler) updateMetricsJSON(req *http.Request) (model.Metri
 		}
 		requestMetric.Delta = nil
 	default:
-		return model.Metrics{}, http.StatusBadRequest, fmt.Errorf("Unknown metric type \"%s\"", requestMetric.MType)
+		return model.Metrics{}, http.StatusBadRequest, fmt.Errorf("unknown metric type \"%s\"", requestMetric.MType)
 	}
 
 	return requestMetric, http.StatusOK, nil
 }
 
+// UpdateBatchMetricsJSON принимает непустой JSON-массив метрик по POST /updates/.
+// Проверяет весь пакет до записи; возвращает 200 с исходным массивом, содержащим приращения counter.
+// Неверный пакет даёт 400, сбой хранилища даёт 500.
 func (handler *MetricsHandler) UpdateBatchMetricsJSON(res http.ResponseWriter, req *http.Request) {
 	requestMetrics, status, err := handler.updateBatchMetricsJSON(req)
 	if err != nil {
@@ -96,6 +108,7 @@ func (handler *MetricsHandler) UpdateBatchMetricsJSON(res http.ResponseWriter, r
 		return
 	}
 
+	handler.auditBatch(req, requestMetrics)
 	writeMetricsBatchJSON(res, requestMetrics)
 }
 
@@ -119,7 +132,7 @@ func (handler *MetricsHandler) updateBatchMetricsJSON(req *http.Request) ([]mode
 				return nil, http.StatusBadRequest, fmt.Errorf("value is required for %q", metric.ID)
 			}
 		default:
-			return nil, http.StatusBadRequest, fmt.Errorf("Unknown metric type \"%s\"", metric.MType)
+			return nil, http.StatusBadRequest, fmt.Errorf("unknown metric type \"%s\"", metric.MType)
 		}
 	}
 

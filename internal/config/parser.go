@@ -1,3 +1,4 @@
+// Пакет config читает настройки агента и сервера из флагов и переменных окружения.
 package config
 
 import (
@@ -12,6 +13,11 @@ import (
 	"github.com/caarlos0/env/v11"
 )
 
+// ParseConfig читает значения по умолчанию из flag, затем args; env переопределяет флаги.
+// T должен быть структурой с экспортированными полями
+// string, int, bool или time.Duration и тегами flag вида "name,default=value".
+// Длительности задаются целыми секундами или строками длительности Go.
+// Ограничения приложения не проверяются.
 func ParseConfig[T any](args []string) (T, error) {
 	cfg, err := parseConfigFromFlags[T](args)
 	if err != nil {

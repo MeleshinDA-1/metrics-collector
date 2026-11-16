@@ -9,6 +9,9 @@ import (
 	"github.com/MeleshinDA-1/metrics-collector/internal/model"
 )
 
+// ValueMetricsJSON обрабатывает POST /value/ с JSON-полями id и type.
+// Возвращает 200 со значением в JSON, 400 при неверном JSON, 404 при неизвестном
+// типе или отсутствии метрики и 500 при ошибке хранилища.
 func (handler *MetricsHandler) ValueMetricsJSON(res http.ResponseWriter, req *http.Request) {
 	var requestMetric model.Metrics
 	if err := json.NewDecoder(req.Body).Decode(&requestMetric); err != nil {
@@ -63,6 +66,9 @@ func (handler *MetricsHandler) ValueMetricsJSON(res http.ResponseWriter, req *ht
 	}
 }
 
+// ValueMetrics обрабатывает GET /value/{metricType}/{metricName}; переменные задаёт роутер.
+// Возвращает 200 с текстовым значением, 404 при отсутствии метрики или неизвестном типе,
+// 500 при ошибке хранилища.
 func (handler *MetricsHandler) ValueMetrics(res http.ResponseWriter, req *http.Request) {
 	metricType := pathValue(req, "metricType")
 	metricName := pathValue(req, "metricName")

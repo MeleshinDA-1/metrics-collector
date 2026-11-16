@@ -23,11 +23,15 @@ const (
 	addCounterReturningQuery = addCounterQuery + ` RETURNING value`
 )
 
+// DBMetricStorage хранит метрики в PostgreSQL через пул вызывающего кода,
+// повторяя операции при временных ошибках.
 type DBMetricStorage struct {
 	pool        *pgxpool.Pool
 	retryPolicy retry.Policy
 }
 
+// NewDBMetricStorage требует готовый пул и применённые миграции.
+// Миграции и закрытие пула выполняет вызывающий код.
 func NewDBMetricStorage(pool *pgxpool.Pool, retryPolicy retry.Policy) *DBMetricStorage {
 	return &DBMetricStorage{
 		pool:        pool,
@@ -47,6 +51,7 @@ func (storage *DBMetricStorage) SetGauge(ctx context.Context, name string, value
 	return nil
 }
 
+// AddCounter атомарно прибавляет delta в PostgreSQL и возвращает итог.
 func (storage *DBMetricStorage) AddCounter(ctx context.Context, name string, delta int64) (int64, error) {
 	var value int64
 
@@ -60,6 +65,9 @@ func (storage *DBMetricStorage) AddCounter(ctx context.Context, name string, del
 	return value, nil
 }
 
+// UpdateBatch применяет известные типы в одной транзакции с повторами при временных ошибках.
+// Отсутствие Value/Delta у известного типа даёт ошибку;
+// неизвестные типы игнорируются. Пустой пакет ничего не меняет.
 func (storage *DBMetricStorage) UpdateBatch(ctx context.Context, metrics []model.Metrics) error {
 	if len(metrics) == 0 {
 		return nil
@@ -150,6 +158,8 @@ func (storage *DBMetricStorage) GetCounter(ctx context.Context, name string) (in
 	return value, true, nil
 }
 
+// Snapshot читает все метрики в новые карты без общей транзакции.
+// Состояния gauge и counter могут различаться по времени.
 func (storage *DBMetricStorage) Snapshot(ctx context.Context) (model.MetricsSnapshot, error) {
 	var snapshot model.MetricsSnapshot
 

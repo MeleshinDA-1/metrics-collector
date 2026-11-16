@@ -1,0 +1,18 @@
+File: agent.test.exe
+Build ID: C:\Users\meles\AppData\Local\Temp\go-build1945562311\b001\agent.test.exe2026-10-28 09:04:38.1005087 +0300 MSK
+Type: inuse_space
+Time: 2026-10-28 09:04:39 MSK
+Showing nodes accounting for 38.95kB, 93.86% of 41.49kB total
+Dropped 92 nodes (cum <= 0.21kB)
+Showing top 10 nodes out of 123
+      flat  flat%   sum%        cum   cum%
+   19.56kB 47.15% 47.15%    19.56kB 47.15%  runtime.mallocgc
+       8kB 19.28% 66.43%        8kB 19.28%  hash/crc32.slicingMakeTable
+    2.34kB  5.63% 72.06%     2.34kB  5.63%  net/textproto.initCommonHeader
+    2.05kB  4.93% 76.99%     2.05kB  4.93%  regexp.onePassCopy
+       2kB  4.82% 81.81%        2kB  4.82%  bytes.growSlice
+    1.94kB  4.67% 86.48%     2.36kB  5.69%  encoding/json.typeFields
+    1.38kB  3.31% 89.79%     1.38kB  3.31%  regexp/syntax.(*compiler).inst
+    0.69kB  1.66% 91.45%     0.69kB  1.66%  sync.(*Pool).pinSlow
+    0.62kB  1.51% 92.96%     0.62kB  1.51%  internal/sync.newIndirectNode[go.shape.interface {},go.shape.interface {}] (inline)
+    0.38kB   0.9% 93.86%     0.38kB   0.9%  internal/sync.newEntryNode[go.shape.interface {},go.shape.interface {}] (inline)

@@ -12,11 +12,14 @@ import (
 	"github.com/MeleshinDA-1/metrics-collector/internal/model"
 )
 
+// FileMetricsRepository сохраняет снимки метрик JSON-массивом.
 type FileMetricsRepository struct {
 	FilePath string
 	mutex    sync.Mutex
 }
 
+// Flush очищает или создаёт FilePath и записывает снимок.
+// Замена неатомарна: ошибка может оставить пустой или неполный файл.
 func (repo *FileMetricsRepository) Flush(ctx context.Context, storage MetricsSnapshotProvider) error {
 	repo.mutex.Lock()
 	defer repo.mutex.Unlock()
@@ -60,6 +63,9 @@ func (repo *FileMetricsRepository) Flush(ctx context.Context, storage MetricsSna
 	return nil
 }
 
+// Restore читает FilePath по порядку; пустой или отсутствующий файл игнорируется.
+// Gauge заменяются, counter прибавляются при каждом вызове, поэтому используйте пустое хранилище.
+// Ошибка не откатывает записи.
 func (repo *FileMetricsRepository) Restore(ctx context.Context, storage MetricsWriter) error {
 	file, err := os.Open(repo.FilePath)
 	if errors.Is(err, os.ErrNotExist) {

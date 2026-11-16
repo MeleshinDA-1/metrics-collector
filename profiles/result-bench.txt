@@ -1,0 +1,57 @@
+goos: windows
+goarch: amd64
+pkg: github.com/MeleshinDA-1/metrics-collector/internal/agent
+cpu: AMD Ryzen 9 9950X3D 16-Core Processor
+BenchmarkBuildBatch      	    1000	      1100 ns/op	    2568 B/op	      34 allocs/op
+BenchmarkBuildBatch      	    1000	       622.1 ns/op	    2568 B/op	      34 allocs/op
+BenchmarkBuildBatch      	    1000	       600.9 ns/op	    2568 B/op	      34 allocs/op
+BenchmarkBuildBatch      	    1000	       510.5 ns/op	    2568 B/op	      34 allocs/op
+BenchmarkBuildBatch      	    1000	       587.3 ns/op	    2568 B/op	      34 allocs/op
+BenchmarkEncodeBatch     	    1000	     19956 ns/op	    2752 B/op	       8 allocs/op
+BenchmarkEncodeBatch     	    1000	     19842 ns/op	    2752 B/op	       8 allocs/op
+BenchmarkEncodeBatch     	    1000	     20281 ns/op	    2752 B/op	       8 allocs/op
+BenchmarkEncodeBatch     	    1000	     19515 ns/op	    2752 B/op	       8 allocs/op
+BenchmarkEncodeBatch     	    1000	     19570 ns/op	    2752 B/op	       8 allocs/op
+BenchmarkMetricsPipeline 	    1000	     91224 ns/op	   87921 B/op	     304 allocs/op
+BenchmarkMetricsPipeline 	    1000	     89296 ns/op	   87916 B/op	     304 allocs/op
+BenchmarkMetricsPipeline 	    1000	     90866 ns/op	   87902 B/op	     304 allocs/op
+BenchmarkMetricsPipeline 	    1000	     90315 ns/op	   87919 B/op	     304 allocs/op
+BenchmarkMetricsPipeline 	    1000	     95178 ns/op	   87918 B/op	     304 allocs/op
+PASS
+ok  	github.com/MeleshinDA-1/metrics-collector/internal/agent	1.440s
+goos: windows
+goarch: amd64
+pkg: github.com/MeleshinDA-1/metrics-collector/internal/repository
+cpu: AMD Ryzen 9 9950X3D 16-Core Processor
+BenchmarkMemStorage/32/UpdateBatch         	    1000	       247.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemStorage/32/UpdateBatch         	    1000	       241.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemStorage/32/UpdateBatch         	    1000	       242.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemStorage/32/UpdateBatch         	    1000	       242.4 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemStorage/32/UpdateBatch         	    1000	       255.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemStorage/32/GetGauge            	    1000	        13.80 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemStorage/32/GetGauge            	    1000	        13.70 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemStorage/32/GetGauge            	    1000	        14.00 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemStorage/32/GetGauge            	    1000	        13.80 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemStorage/32/GetGauge            	    1000	        13.90 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemStorage/32/Snapshot            	    1000	      1214 ns/op	    1928 B/op	       5 allocs/op
+BenchmarkMemStorage/32/Snapshot            	    1000	       643.2 ns/op	    1928 B/op	       5 allocs/op
+BenchmarkMemStorage/32/Snapshot            	    1000	       598.3 ns/op	    1928 B/op	       5 allocs/op
+BenchmarkMemStorage/32/Snapshot            	    1000	       584.7 ns/op	    1928 B/op	       5 allocs/op
+BenchmarkMemStorage/32/Snapshot            	    1000	       582.7 ns/op	    1928 B/op	       5 allocs/op
+BenchmarkMemStorage/1024/UpdateBatch       	    1000	      9986 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemStorage/1024/UpdateBatch       	    1000	     10020 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemStorage/1024/UpdateBatch       	    1000	     10006 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemStorage/1024/UpdateBatch       	    1000	      9998 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemStorage/1024/UpdateBatch       	    1000	     10016 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemStorage/1024/GetGauge          	    1000	        13.10 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemStorage/1024/GetGauge          	    1000	        13.10 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemStorage/1024/GetGauge          	    1000	        13.10 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemStorage/1024/GetGauge          	    1000	        13.10 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemStorage/1024/GetGauge          	    1000	        13.00 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemStorage/1024/Snapshot          	    1000	     18570 ns/op	   54704 B/op	       7 allocs/op
+BenchmarkMemStorage/1024/Snapshot          	    1000	     19396 ns/op	   54704 B/op	       7 allocs/op
+BenchmarkMemStorage/1024/Snapshot          	    1000	     18363 ns/op	   54704 B/op	       7 allocs/op
+BenchmarkMemStorage/1024/Snapshot          	    1000	     17752 ns/op	   54704 B/op	       7 allocs/op
+BenchmarkMemStorage/1024/Snapshot          	    1000	     18046 ns/op	   54704 B/op	       7 allocs/op
+PASS
+ok  	github.com/MeleshinDA-1/metrics-collector/internal/repository	0.387s
